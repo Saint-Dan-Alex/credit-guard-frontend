@@ -1,36 +1,47 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# 🛡️ CreditGuard — Infrastructure de Crédit Intelligente
 
-## Getting Started
+CreditGuard est une plateforme SaaS de pointe pour la gestion du cycle de vie des crédits, optimisée pour le marché africain. Elle combine scoring déterministe, workflow de décision et analytics financiers.
 
-First, run the development server:
+## 📁 Structure du Projet
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+- **/frontend** : Interface Next.js 14 (React, Tailwind CSS, Lucide).
+- **/backend** : API REST Node.js (Express, TypeScript, Prisma).
+
+## 🚀 Installation & Lancement
+
+### 1. Configuration de la Base de Données
+Assurez-vous d'avoir **PostgreSQL** installé.
+Créez un fichier `.env` dans le dossier `/backend` :
+```env
+DATABASE_URL="postgresql://USER:PASSWORD@localhost:5432/creditguard?schema=public"
+JWT_SECRET="votre_secret_jwt"
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+### 2. Backend
+```bash
+cd backend
+npm install
+npx prisma migrate dev --name init
+npm run dev
+```
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+### 3. Frontend
+```bash
+cd frontend
+npm install
+npm run dev
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## ⚙️ Modules Implémentés
+1. **Authentification & Multi-tenant** : Isolation par organisation (Banque/Microfinance).
+2. **KYC & Gestion Clients** : Création de profils financiers détaillés.
+3. **Moteur de Scoring** : Algorithme déterministe calculant le risque en temps réel.
+4. **Workflow de Décision** : Système d'approbation automatique et manuelle.
+5. **Gestion des Prêts** : Activation des contrats et suivi des remboursements.
+6. **Tableau de Bord Financier** : Statistiques en temps réel (Encours, Taux de défaut, Score moyen).
 
-## Learn More
+## 📊 Documentation
+Consultez le fichier `DOCUMENTATION_CREDITGUARD.md` pour le détail fonctionnel complet.
 
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+---
+*CreditGuard — Sécuriser l'avenir du crédit en Afrique.*

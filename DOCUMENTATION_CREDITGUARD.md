@@ -110,7 +110,7 @@ Digitalisation et automatisation du cycle complet :
 ---
 
 ## 🏗 Architecture Technique
-- **Frontend** : React (Web), Flutter (Mobile).
+- **Frontend** : Next.js (Web), React Native (Mobile).
 - **Backend** : Node.js, FastAPI (Scoring Engine).
 - **Base de Données** : PostgreSQL, MongoDB.
 

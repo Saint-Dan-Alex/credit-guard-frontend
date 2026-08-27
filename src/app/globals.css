@@ -1,78 +1,125 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-  --primary: #1e40af;
-  --primary-foreground: #ffffff;
-  --secondary: #f97316;
-  --secondary-foreground: #ffffff;
-  --accent: #f1f5f9;
-  --accent-foreground: #1e40af;
-  --success: #22c55e;
-  --card: #ffffff;
-  --card-foreground: #0f172a;
-  --border: #e2e8f0;
-  --radius: 1rem;
-}
+@layer base {
+  :root {
+    --background: 210 40% 98%; /* #F8FAFC */
+    --foreground: 222 47% 11%; /* #0F172A */
+    
+    --card: 0 0% 100%; /* #FFFFFF */
+    --card-foreground: 222 47% 11%;
+    
+    --popover: 0 0% 100%;
+    --popover-foreground: 222 47% 11%;
+    
+    --primary: 224 71% 40%; /* #1E40AF */
+    --primary-foreground: 210 40% 98%;
+    
+    --secondary: 210 40% 96.1%;
+    --secondary-foreground: 222 47% 11.2%;
+    
+    --muted: 210 40% 96.1%;
+    --muted-foreground: 215.4 16.3% 46.9%; /* #64748B */
+    
+    --accent: 210 40% 96.1%;
+    --accent-foreground: 222 47% 11.2%;
+    
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 210 40% 98%;
+    
+    --success: 142 71% 45%;
+    --success-foreground: 210 40% 98%;
 
-.dark {
-  --background: #0f172a;
-  --foreground: #f8fafc;
-  --primary: #3b82f6;
-  --primary-foreground: #ffffff;
-  --card: #1e293b;
-  --card-foreground: #f8fafc;
-  --border: #334155;
+    --warning: 38 92% 50%;
+    --warning-foreground: 222 47% 11%;
+
+    --border: 214.3 31.8% 91.4%; /* #E2E8F0 */
+    --input: 214.3 31.8% 91.4%;
+    --ring: 224 71% 40%;
+    
+    --radius: 0.625rem; /* 10px */
+
+    /* Surfaces */
+    --surface-app: #F8FAFC;
+    --surface-sidebar: #FFFFFF;
+    --surface-card: #FFFFFF;
+    --surface-elevated: #FFFFFF;
+    --surface-popover: #FFFFFF;
+  }
+
+  .dark {
+    --background: 240 10% 3.9%; /* #09090B - Niveau 1 */
+    --foreground: 210 40% 98%; /* #F8FAFC */
+    
+    --card: 240 10% 6.7%; /* #111318 - Niveau 3 */
+    --card-foreground: 210 40% 98%;
+    
+    --popover: 240 5.9% 10%; /* #18181B - Niveau 5 */
+    --popover-foreground: 210 40% 98%;
+    
+    --primary: 217 91% 60%; /* #3B82F6 */
+    --primary-foreground: 222 47% 11.2%;
+    
+    --secondary: 240 3.7% 15.9%;
+    --secondary-foreground: 210 40% 98%;
+    
+    --muted: 240 3.7% 15.9%;
+    --muted-foreground: 240 5% 64.9%; /* #A1A1AA */
+    
+    --accent: 240 3.7% 15.9%;
+    --accent-foreground: 210 40% 98%;
+    
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 210 40% 98%;
+    
+    --success: 142 70% 45%;
+    --success-foreground: 210 40% 98%;
+
+    --warning: 38 92% 50%;
+    --warning-foreground: 210 40% 98%;
+
+    --border: 240 3.7% 15.9%; /* #27272A */
+    --input: 240 3.7% 15.9%;
+    --ring: 217 91% 60%;
+
+    /* Surfaces Dark */
+    --surface-app: #09090B;
+    --surface-sidebar: #0F1115;
+    --surface-card: #111318;
+    --surface-elevated: #181A20;
+    --surface-popover: #18181B;
+  }
 }
 
 body {
-  background-color: var(--background);
-  color: var(--foreground);
-  font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  background-color: hsl(var(--background));
+  color: hsl(var(--foreground));
+  font-family: var(--font-inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif);
   -webkit-font-smoothing: antialiased;
-  background-image: 
-    radial-gradient(at 0% 0%, rgba(30, 64, 175, 0.03) 0, transparent 50%),
-    radial-gradient(at 100% 100%, rgba(79, 70, 229, 0.03) 0, transparent 50%);
+  -moz-osx-font-smoothing: grayscale;
+  transition: background-color 200ms ease, color 200ms ease;
 }
 
-.btn-primary {
-  padding: 0.5rem 1rem;
-  background-color: var(--primary);
-  color: #ffffff;
-  border-radius: 0.5rem;
-  font-weight: 500;
-  box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
-  transition: all 0.15s ease-in-out;
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
 }
-.btn-primary:hover {
-  background-color: #1d4ed8;
+::-webkit-scrollbar-track {
+  background: transparent;
 }
-
-.btn-secondary {
-  padding: 0.5rem 1rem;
-  background-color: var(--secondary);
-  color: #ffffff;
-  border-radius: 0.5rem;
-  font-weight: 500;
-  box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
-  transition: all 0.15s ease-in-out;
+::-webkit-scrollbar-thumb {
+  background: hsl(var(--muted-foreground) / 0.2);
+  border-radius: 9999px;
 }
-.btn-secondary:hover {
-  background-color: #ea580c;
+::-webkit-scrollbar-thumb:hover {
+  background: hsl(var(--muted-foreground) / 0.4);
 }
 
-.card {
-  background-color: #ffffff;
-  border: 1px solid var(--border);
-  border-radius: 0.75rem;
-  padding: 1.5rem;
-  box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
-  transition: box-shadow 0.2s ease-in-out;
+/* Transitions */
+* {
+  border-color: hsl(var(--border));
 }
-.dark .card {
-  background-color: #1e293b;
-}
-.card:hover {
-  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+
+.custom-scrollbar::-webkit-scrollbar {
+  width: 4px;
 }

@@ -1,117 +1,190 @@
-'use client';
+"use client";
 
-import React, { useEffect, useState } from 'react';
-import Sidebar from '@/components/Sidebar';
-import Header from '@/components/Header';
-import { 
-  Shield, 
-  History, 
-  User, 
-  AlertTriangle, 
-  CheckCircle, 
-  Filter,
-  Search,
-  RefreshCw
-} from 'lucide-react';
-import { api } from '@/lib/api';
+import React, { useEffect, useState, useMemo } from "react";
+import { AppLayout } from "@/components/layout/AppLayout";
+import { PageHeader } from "@/components/shared/PageHeader";
+import { PageToolbar } from "@/components/shared/PageToolbar";
+import { Pagination } from "@/components/shared/Pagination";
+import { EmptyState } from "@/components/shared/EmptyState";
+import { TableLoadingState } from "@/components/shared/LoadingState";
+import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import {
+  History,
+  Shield,
+  User,
+  CheckCircle2,
+  AlertTriangle,
+  RefreshCw,
+  Code,
+  Download,
+} from "lucide-react";
+import { api } from "@/lib/api";
+import { formatDate } from "@/lib/utils";
+import { toast } from "sonner";
 
 export default function AuditLogsPage() {
-    const [logs, setLogs] = useState<any[]>([]);
-    const [loading, setLoading] = useState(true);
+  const [logs, setLogs] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [search, setSearch] = useState("");
 
-    const loadLogs = async () => {
-        try {
-            setLoading(true);
-            const data = await api.getAuditLogs();
-            setLogs(data);
-        } catch (err) {
-            console.error('Failed to load audit logs:', err);
-        } finally {
-            setLoading(false);
-        }
-    };
+  // Pagination
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
 
-    useEffect(() => {
-        loadLogs();
-    }, []);
+  const loadLogs = async (isManual = false) => {
+    try {
+      if (isManual) setRefreshing(true);
+      else setLoading(true);
 
-    return (
-        <div className="flex h-screen bg-[#F8FAFC] dark:bg-slate-950 overflow-hidden font-sans">
-            <Sidebar />
-            <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-                <Header />
+      const data = await api.getAuditLogs();
+      setLogs(data || []);
+      if (isManual) toast.success("Journaux d'audit synchronisés");
+    } catch (err) {
+      console.error("Failed to load audit logs:", err);
+      toast.error("Impossible de récupérer les journaux d'audit");
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  };
 
-                <main className="flex-1 overflow-y-auto px-8 py-8 custom-scrollbar">
-                    <div className="flex items-center justify-between mb-10">
-                        <div>
-                            <h2 className="text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight">Journaux d'Audit</h2>
-                            <p className="text-slate-500 dark:text-slate-400 mt-1 font-medium">Traçabilité immuable des décisions, décaissements et opérations financières</p>
+  useEffect(() => {
+    loadLogs();
+  }, []);
+
+  const filteredLogs = useMemo(() => {
+    let list = logs;
+    if (search.trim()) {
+      const q = search.toLowerCase();
+      list = list.filter((l) => {
+        const action = (l.action || "").toLowerCase();
+        const entity = (l.entity || "").toLowerCase();
+        const user = (l.user?.name || l.user?.email || "").toLowerCase();
+        return action.includes(q) || entity.includes(q) || user.includes(q);
+      });
+    }
+    return list;
+  }, [logs, search]);
+
+  const paginatedLogs = useMemo(() => {
+    const start = (currentPage - 1) * pageSize;
+    return filteredLogs.slice(start, start + pageSize);
+  }, [filteredLogs, currentPage, pageSize]);
+
+  return (
+    <AppLayout>
+      <div className="p-4 md:p-6 lg:p-8 space-y-6 max-w-7xl mx-auto">
+        <PageHeader
+          title="Journaux d'Audit & Sécurité"
+          description="Traçabilité immuable des décisions de crédit, des décaissements, des authentifications et modifications de paramètres"
+          badge="Audit Trail Immuable"
+        >
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => loadLogs(true)}
+            className="gap-1.5 text-xs"
+          >
+            <RefreshCw className={refreshing ? "h-3.5 w-3.5 animate-spin" : "h-3.5 w-3.5"} />
+            <span>Actualiser</span>
+          </Button>
+
+          <Button
+            size="sm"
+            onClick={() => toast.success("Exportation de la piste d'audit certifiée CSV")}
+            className="gap-1.5 text-xs"
+          >
+            <Download className="h-3.5 w-3.5" />
+            <span>Exporter l'Audit</span>
+          </Button>
+        </PageHeader>
+
+        <PageToolbar
+          searchValue={search}
+          onSearchChange={(val) => {
+            setSearch(val);
+            setCurrentPage(1);
+          }}
+          searchPlaceholder="Filtrer par action, entité, utilisateur..."
+        />
+
+        {loading ? (
+          <TableLoadingState rows={8} cols={5} />
+        ) : filteredLogs.length === 0 ? (
+          <EmptyState
+            type={search ? "no-results" : "empty"}
+            title="Aucun journal d'audit enregistré"
+            description="Toutes les opérations sensibles apparaîtront ici automatiquement avec leur horodatage exact."
+            icon={History}
+          />
+        ) : (
+          <div className="rounded-xl border border-border bg-card overflow-hidden shadow-xs">
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="bg-muted/40 border-b border-border text-[10px] font-bold uppercase tracking-wider text-muted-foreground text-left">
+                    <th className="p-3.5 pl-4">Opération / Action</th>
+                    <th className="p-3.5">Entité Cible</th>
+                    <th className="p-3.5">Auteur / Agent</th>
+                    <th className="p-3.5">Horodatage</th>
+                    <th className="p-3.5 pr-4 text-right">Détails (Diff JSON)</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border/60">
+                  {paginatedLogs.map((log) => (
+                    <tr key={log.id} className="hover:bg-muted/30 transition-colors">
+                      <td className="p-3.5 pl-4">
+                        <Badge variant="default" className="font-mono text-[10px]">
+                          {log.action}
+                        </Badge>
+                      </td>
+                      <td className="p-3.5 font-bold text-foreground">
+                        {log.entity} {log.entityId ? <span className="font-mono text-[10px] text-muted-foreground font-normal">({log.entityId?.slice(0, 8)})</span> : ""}
+                      </td>
+                      <td className="p-3.5">
+                        <div className="flex items-center gap-1.5">
+                          <User className="h-3.5 w-3.5 text-muted-foreground" />
+                          <span className="font-medium text-foreground">
+                            {log.user?.name || log.user?.email || "Système Automatique"}
+                          </span>
                         </div>
-                        <div className="flex gap-3">
-                            <button 
-                                onClick={loadLogs}
-                                className="flex items-center gap-2 px-4 py-2.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-sm font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-50 transition-all shadow-sm"
-                            >
-                                <RefreshCw size={16} className={loading ? 'animate-spin' : ''} /> Actualiser
-                            </button>
-                        </div>
-                    </div>
-
-                    <div className="card overflow-hidden">
-                        <div className="overflow-x-auto">
-                            <table className="w-full text-left">
-                                <thead className="bg-slate-50/50 dark:bg-slate-800/50 text-[10px] font-extrabold text-slate-400 uppercase tracking-widest">
-                                    <tr>
-                                        <th className="px-6 py-4">Action</th>
-                                        <th className="px-6 py-4">Entité Cible</th>
-                                        <th className="px-6 py-4">Utilisateur / Agent</th>
-                                        <th className="px-6 py-4">Horodatage</th>
-                                        <th className="px-6 py-4 text-right">Détails Changements</th>
-                                    </tr>
-                                </thead>
-                                <tbody className="divide-y divide-slate-100 dark:divide-slate-800 text-xs">
-                                    {loading ? (
-                                        <tr>
-                                            <td colSpan={5} className="px-6 py-8 text-center text-slate-400">Chargement des logs d'audit...</td>
-                                        </tr>
-                                    ) : logs.length === 0 ? (
-                                        <tr>
-                                            <td colSpan={5} className="px-6 py-8 text-center text-slate-500">Aucun log d'audit enregistré.</td>
-                                        </tr>
-                                    ) : (
-                                        logs.map((log) => (
-                                            <tr key={log.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/50 transition-colors">
-                                                <td className="px-6 py-4 font-bold text-slate-900 dark:text-white">
-                                                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-mono bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400">
-                                                        {log.action}
-                                                    </span>
-                                                </td>
-                                                <td className="px-6 py-4">
-                                                    <span className="font-semibold text-slate-700 dark:text-slate-300">{log.entity}</span>
-                                                    <span className="block text-[10px] text-slate-400 font-mono">{log.entityId}</span>
-                                                </td>
-                                                <td className="px-6 py-4">
-                                                    <span className="font-medium text-slate-700 dark:text-slate-300">
-                                                        {log.user?.name || log.user?.email || 'Système'}
-                                                    </span>
-                                                </td>
-                                                <td className="px-6 py-4 text-slate-400">
-                                                    {new Date(log.createdAt).toLocaleString()}
-                                                </td>
-                                                <td className="px-6 py-4 text-right">
-                                                    <code className="text-[10px] bg-slate-100 dark:bg-slate-800 p-1 rounded font-mono text-slate-600 dark:text-slate-300">
-                                                        {log.changes ? JSON.stringify(log.changes) : '-'}
-                                                    </code>
-                                                </td>
-                                            </tr>
-                                        ))
-                                    )}
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                </main>
+                      </td>
+                      <td className="p-3.5 text-muted-foreground font-mono text-[11px]">
+                        {formatDate(log.createdAt)} {new Date(log.createdAt).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}
+                      </td>
+                      <td className="p-3.5 pr-4 text-right">
+                        {log.changes ? (
+                          <span className="font-mono text-[10px] bg-muted px-2 py-1 rounded text-muted-foreground inline-block max-w-[220px] truncate">
+                            {typeof log.changes === "object" ? JSON.stringify(log.changes) : log.changes}
+                          </span>
+                        ) : (
+                          <span className="text-muted-foreground text-[10px] italic">Aucun diff</span>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
-        </div>
-    );
+          </div>
+        )}
+
+        {filteredLogs.length > 0 && (
+          <Pagination
+            currentPage={currentPage}
+            totalItems={filteredLogs.length}
+            pageSize={pageSize}
+            onPageChange={setCurrentPage}
+            onPageSizeChange={(size) => {
+              setPageSize(size);
+              setCurrentPage(1);
+            }}
+          />
+        )}
+      </div>
+    </AppLayout>
+  );
 }

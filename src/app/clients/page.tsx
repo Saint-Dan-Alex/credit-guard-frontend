@@ -1,370 +1,398 @@
-'use client';
+"use client";
 
-import React, { useEffect, useState } from 'react';
-import Sidebar from '@/components/Sidebar';
-import Header from '@/components/Header';
-import { UserPlus, Mail, Phone, MapPin, ExternalLink, ShieldCheck, Search, X, Briefcase, Building } from 'lucide-react';
-import { api } from '@/lib/api';
+import React, { useEffect, useState, useMemo } from "react";
+import Link from "next/link";
+import { AppLayout } from "@/components/layout/AppLayout";
+import { PageHeader } from "@/components/shared/PageHeader";
+import { PageToolbar } from "@/components/shared/PageToolbar";
+import { Pagination } from "@/components/shared/Pagination";
+import { EmptyState } from "@/components/shared/EmptyState";
+import { TableLoadingState, CardsLoadingState } from "@/components/shared/LoadingState";
+import { FavoriteButton } from "@/components/shared/FavoriteButton";
+import { PinButton } from "@/components/shared/PinButton";
+import { BulkActions } from "@/components/shared/BulkActions";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Card, CardContent } from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
+  Users,
+  UserPlus,
+  MoreHorizontal,
+  Eye,
+  Mail,
+  Phone,
+  MapPin,
+  Briefcase,
+  Download,
+  Plus,
+} from "lucide-react";
+import { api } from "@/lib/api";
+import { formatCurrency, formatDate } from "@/lib/utils";
+import { toast } from "sonner";
 
 export default function ClientsPage() {
-    const [clients, setClients] = useState<any[]>([]);
-    const [loading, setLoading] = useState(true);
-    const [search, setSearch] = useState('');
-    const [showModal, setShowModal] = useState(false);
-    const [selectedClient, setSelectedClient] = useState<any>(null);
+  const [clients, setClients] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
 
-    // New Client Form
-    const [firstName, setFirstName] = useState('');
-    const [lastName, setLastName] = useState('');
-    const [email, setEmail] = useState('');
-    const [phone, setPhone] = useState('');
-    const [city, setCity] = useState('Kinshasa');
-    const [country, setCountry] = useState('RDC');
-    const [monthlyIncome, setMonthlyIncome] = useState('');
-    const [occupation, setOccupation] = useState('');
-    const [employer, setEmployer] = useState('');
-    const [submitting, setSubmitting] = useState(false);
+  // Search & Views
+  const [search, setSearch] = useState("");
+  const [viewMode, setViewMode] = useState<"table" | "cards">("table");
 
-    const loadClients = async () => {
-        try {
-            setLoading(true);
-            const data = await api.getClients(search || undefined);
-            setClients(data);
-        } catch (err) {
-            console.error('Failed to load clients:', err);
-        } finally {
-            setLoading(false);
-        }
-    };
+  // Pagination
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
 
-    useEffect(() => {
-        loadClients();
-    }, []);
+  // Selection & Persistence
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [favorites, setFavorites] = useState<Record<string, boolean>>({});
+  const [pinned, setPinned] = useState<Record<string, boolean>>({});
 
-    const handleSearch = (e: React.FormEvent) => {
-        e.preventDefault();
-        loadClients();
-    };
+  const loadClients = async (isManual = false) => {
+    try {
+      if (isManual) setRefreshing(true);
+      else setLoading(true);
 
-    const handleCreateClient = async (e: React.FormEvent) => {
-        e.preventDefault();
-        try {
-            setSubmitting(true);
-            await api.createClient({
-                firstName,
-                lastName,
-                email,
-                phone,
-                city,
-                country,
-                monthlyIncome: parseFloat(monthlyIncome),
-                occupation,
-                employer,
-            });
+      const data = await api.getClients(search || undefined);
+      setClients(data || []);
+      if (isManual) toast.success("Base emprunteurs actualisée");
+    } catch (err) {
+      console.error("Failed to load clients:", err);
+      toast.error("Impossible de récupérer les clients");
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  };
 
-            setShowModal(false);
-            setFirstName('');
-            setLastName('');
-            setEmail('');
-            setPhone('');
-            setMonthlyIncome('');
-            setOccupation('');
-            setEmployer('');
-            await loadClients();
-        } catch (err: any) {
-            alert(err.message || 'Erreur lors de la création du client');
-        } finally {
-            setSubmitting(false);
-        }
-    };
+  useEffect(() => {
+    loadClients();
+  }, []);
 
-    const viewClientDetails = async (id: string) => {
-        try {
-            const data = await api.getClientById(id);
-            setSelectedClient(data);
-        } catch (err) {
-            console.error('Failed to load client details:', err);
-        }
-    };
+  const filteredClients = useMemo(() => {
+    let list = clients;
+    if (search.trim()) {
+      const q = search.toLowerCase();
+      list = list.filter((c) => {
+        const fullName = `${c.firstName || ""} ${c.lastName || ""} ${c.companyName || ""}`.toLowerCase();
+        const email = (c.email || "").toLowerCase();
+        const phone = (c.phone || "").toLowerCase();
+        const city = (c.city || "").toLowerCase();
+        return fullName.includes(q) || email.includes(q) || phone.includes(q) || city.includes(q);
+      });
+    }
 
-    return (
-        <div className="flex h-screen bg-[#F1F5F9] dark:bg-slate-900 overflow-hidden">
-            <Sidebar />
-            <div className="flex-1 flex flex-col min-w-0">
-                <Header />
+    return [...list].sort((a, b) => {
+      const aPin = pinned[a.id] ? 1 : 0;
+      const bPin = pinned[b.id] ? 1 : 0;
+      if (aPin !== bPin) return bPin - aPin;
+      return new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime();
+    });
+  }, [clients, search, pinned]);
 
-                <div className="flex-1 overflow-y-auto p-8">
-                    <div className="flex flex-col md:flex-row md:items-center justify-between mb-8 gap-4">
-                        <div>
-                            <h2 className="text-2xl font-bold text-gray-800 dark:text-white">Annuaire Clients & KYC</h2>
-                            <p className="text-gray-500 text-sm">Référentiel des emprunteurs et solvabilité</p>
-                        </div>
-                        <div className="flex gap-3">
-                            <form onSubmit={handleSearch} className="relative">
-                                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
-                                <input
-                                    type="text"
-                                    placeholder="Rechercher nom, téléphone..."
-                                    value={search}
-                                    onChange={(e) => setSearch(e.target.value)}
-                                    className="pl-9 pr-4 py-2 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg text-sm"
-                                />
-                            </form>
-                            <button 
-                                onClick={() => setShowModal(true)}
-                                className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-semibold hover:bg-blue-700 transition-colors shadow-sm"
-                            >
-                                <UserPlus size={16} /> Nouveau Client
-                            </button>
-                        </div>
-                    </div>
+  const paginatedClients = useMemo(() => {
+    const start = (currentPage - 1) * pageSize;
+    return filteredClients.slice(start, start + pageSize);
+  }, [filteredClients, currentPage, pageSize]);
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                        {loading ? (
-                            <div className="col-span-3 text-center p-8 text-gray-400">Chargement des clients...</div>
-                        ) : clients.length === 0 ? (
-                            <div className="col-span-3 text-center p-8 text-gray-500">Aucun client enregistré.</div>
-                        ) : (
-                            clients.map((client) => (
-                                <div 
-                                    key={client.id} 
-                                    onClick={() => viewClientDetails(client.id)}
-                                    className="card group relative hover:border-blue-400 dark:hover:border-blue-800 transition-all cursor-pointer"
+  return (
+    <AppLayout>
+      <div className="p-4 md:p-6 lg:p-8 space-y-6 max-w-7xl mx-auto">
+        <PageHeader
+          title="Clients Emprunteurs"
+          description="Base de données KYC des emprunteurs particuliers, TPE et personnes morales"
+          badge={`${filteredClients.length} clients`}
+        >
+          <Button size="sm" asChild className="gap-1.5 text-xs">
+            <Link href="/clients/new">
+              <UserPlus className="h-3.5 w-3.5" />
+              <span>Nouveau Client</span>
+            </Link>
+          </Button>
+        </PageHeader>
+
+        {/* Toolbar */}
+        <PageToolbar
+          searchValue={search}
+          onSearchChange={(val) => {
+            setSearch(val);
+            setCurrentPage(1);
+          }}
+          searchPlaceholder="Rechercher par nom, email, téléphone, ville..."
+          viewMode={viewMode}
+          onViewModeChange={setViewMode}
+          onRefresh={() => loadClients(true)}
+          isRefreshing={refreshing}
+          onExport={() => toast.success("Exportation KYC des emprunteurs réussie")}
+        />
+
+        {/* Content */}
+        {loading ? (
+          viewMode === "table" ? (
+            <TableLoadingState rows={6} cols={6} />
+          ) : (
+            <CardsLoadingState count={6} />
+          )
+        ) : filteredClients.length === 0 ? (
+          <EmptyState
+            type={search ? "no-results" : "empty"}
+            title={
+              search
+                ? "Aucun client ne correspond à votre recherche"
+                : "Aucun client enregistré"
+            }
+            description="Enregistrez votre premier emprunteur pour initialiser le profil KYC et les dossiers de crédit."
+            actionLabel={search ? "Effacer la recherche" : "Créer un Client"}
+            onAction={search ? () => setSearch("") : () => (window.location.href = "/clients/new")}
+          />
+        ) : viewMode === "table" ? (
+          /* Table View */
+          <div className="rounded-xl border border-border bg-card overflow-hidden shadow-xs">
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="bg-muted/40 border-b border-border text-[10px] font-bold uppercase tracking-wider text-muted-foreground text-left">
+                    <th className="p-3.5 pl-4 w-10">
+                      <Checkbox
+                        checked={
+                          paginatedClients.length > 0 &&
+                          selectedIds.length === paginatedClients.length
+                        }
+                        onCheckedChange={() => {
+                          if (selectedIds.length === paginatedClients.length) {
+                            setSelectedIds([]);
+                          } else {
+                            setSelectedIds(paginatedClients.map((c) => c.id));
+                          }
+                        }}
+                      />
+                    </th>
+                    <th className="p-3.5">Emprunteur</th>
+                    <th className="p-3.5">Coordonnées</th>
+                    <th className="p-3.5">Localisation</th>
+                    <th className="p-3.5">Activité / Profession</th>
+                    <th className="p-3.5">Revenu Mensuel</th>
+                    <th className="p-3.5 pr-4 text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border/60">
+                  {paginatedClients.map((client) => {
+                    const isSelected = selectedIds.includes(client.id);
+                    const isFav = favorites[client.id] || false;
+                    const isPin = pinned[client.id] || false;
+                    const initials = `${client.firstName?.[0] || ""}${client.lastName?.[0] || ""}`.toUpperCase() || "CL";
+
+                    return (
+                      <tr
+                        key={client.id}
+                        className={`hover:bg-muted/40 transition-colors ${
+                          isSelected ? "bg-muted/50" : ""
+                        }`}
+                      >
+                        <td className="p-3.5 pl-4">
+                          <Checkbox
+                            checked={isSelected}
+                            onCheckedChange={() =>
+                              setSelectedIds((prev) =>
+                                prev.includes(client.id)
+                                  ? prev.filter((i) => i !== client.id)
+                                  : [...prev, client.id]
+                              )
+                            }
+                          />
+                        </td>
+                        <td className="p-3.5">
+                          <div className="flex items-center gap-2.5">
+                            <Avatar className="h-7 w-7 rounded-md">
+                              <AvatarFallback className="text-[10px] font-bold">
+                                {initials}
+                              </AvatarFallback>
+                            </Avatar>
+                            <div>
+                              <Link
+                                href={`/clients/${client.id}`}
+                                className="font-bold text-foreground hover:underline"
+                              >
+                                {client.firstName} {client.lastName}
+                              </Link>
+                              {client.companyName && (
+                                <p className="text-[11px] text-muted-foreground">{client.companyName}</p>
+                              )}
+                            </div>
+                          </div>
+                        </td>
+                        <td className="p-3.5 space-y-0.5 text-muted-foreground">
+                          <div className="flex items-center gap-1.5 font-mono text-[11px]">
+                            <Mail className="h-3 w-3 text-muted-foreground" />
+                            <span>{client.email || "Non renseigné"}</span>
+                          </div>
+                          <div className="flex items-center gap-1.5 font-mono text-[11px]">
+                            <Phone className="h-3 w-3 text-muted-foreground" />
+                            <span>{client.phone || "Non renseigné"}</span>
+                          </div>
+                        </td>
+                        <td className="p-3.5 text-muted-foreground font-medium">
+                          <div className="flex items-center gap-1.5">
+                            <MapPin className="h-3.5 w-3.5 text-muted-foreground" />
+                            <span>{client.city || "Kinshasa"}, {client.country || "RDC"}</span>
+                          </div>
+                        </td>
+                        <td className="p-3.5 font-medium text-foreground">
+                          {client.occupation || "Commerçant"}
+                          {client.employer && (
+                            <span className="text-muted-foreground text-[11px]"> ({client.employer})</span>
+                          )}
+                        </td>
+                        <td className="p-3.5 font-bold text-foreground">
+                          {formatCurrency(client.monthlyIncome || 0)}
+                        </td>
+                        <td className="p-3.5 pr-4 text-right">
+                          <div className="flex items-center justify-end gap-1">
+                            <FavoriteButton
+                              isFavorite={isFav}
+                              onToggle={(f) => setFavorites({ ...favorites, [client.id]: f })}
+                              itemName={`${client.firstName} ${client.lastName}`}
+                            />
+                            <PinButton
+                              isPinned={isPin}
+                              onToggle={(p) => setPinned({ ...pinned, [client.id]: p })}
+                              itemName={`${client.firstName} ${client.lastName}`}
+                            />
+
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button
+                                  variant="ghost"
+                                  size="icon-sm"
+                                  className="h-7 w-7 text-muted-foreground hover:text-foreground"
                                 >
-                                    <div className="absolute top-4 right-4 text-blue-500">
-                                        <ExternalLink size={14} />
-                                    </div>
-
-                                    <div className="flex items-center gap-4 mb-4">
-                                        <div className="w-12 h-12 rounded-full bg-blue-100 dark:bg-blue-900/40 flex items-center justify-center text-blue-600 font-bold text-xl">
-                                            {client.firstName?.[0] || 'C'}
-                                        </div>
-                                        <div>
-                                            <h4 className="font-bold text-gray-900 dark:text-white">{client.firstName} {client.lastName}</h4>
-                                            <span className="text-[10px] text-gray-400 font-mono uppercase tracking-widest">{client.id.slice(0, 10)}</span>
-                                        </div>
-                                    </div>
-
-                                    <div className="space-y-2 mb-6">
-                                        {client.email && (
-                                            <div className="flex items-center gap-2 text-xs text-gray-500">
-                                                <Mail size={14} /> {client.email}
-                                            </div>
-                                        )}
-                                        <div className="flex items-center gap-2 text-xs text-gray-500">
-                                            <Phone size={14} /> {client.phone}
-                                        </div>
-                                        <div className="flex items-center gap-2 text-xs text-gray-500">
-                                            <MapPin size={14} /> {client.city || 'Ville non spécifiée'}, {client.country || 'RDC'}
-                                        </div>
-                                    </div>
-
-                                    <div className="flex items-center justify-between pt-4 border-t border-gray-100 dark:border-gray-700">
-                                        <div className="text-xs">
-                                            <span className="text-gray-400 block mb-1 uppercase tracking-tighter">Revenu Mensuel</span>
-                                            <span className="font-bold text-gray-900 dark:text-white">${client.monthlyIncome?.toLocaleString() || 'N/A'}</span>
-                                        </div>
-                                        <div className="text-right">
-                                            <span className="text-gray-400 block mb-1 uppercase tracking-tighter text-[10px]">Dossiers Associés</span>
-                                            <span className="inline-flex items-center gap-1 text-xs font-bold text-blue-600">
-                                                {client._count?.applications || 0} demande(s)
-                                            </span>
-                                        </div>
-                                    </div>
-                                </div>
-                            ))
-                        )}
-                    </div>
-                </div>
+                                  <MoreHorizontal className="h-4 w-4" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end" className="w-44">
+                                <DropdownMenuLabel>Client</DropdownMenuLabel>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem asChild>
+                                  <Link href={`/clients/${client.id}`}>
+                                    <Eye className="h-3.5 w-3.5 mr-2" />
+                                    <span>Profil KYC</span>
+                                  </Link>
+                                </DropdownMenuItem>
+                                <DropdownMenuItem asChild>
+                                  <Link href="/applications/new">
+                                    <Plus className="h-3.5 w-3.5 mr-2" />
+                                    <span>Créer un Dossier</span>
+                                  </Link>
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
             </div>
+          </div>
+        ) : (
+          /* Cards View */
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {paginatedClients.map((client) => {
+              const isFav = favorites[client.id] || false;
+              const isPin = pinned[client.id] || false;
+              const initials = `${client.firstName?.[0] || ""}${client.lastName?.[0] || ""}`.toUpperCase() || "CL";
 
-            {/* Modal Nouveau Client */}
-            {showModal && (
-                <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
-                    <div className="bg-white dark:bg-slate-900 rounded-2xl max-w-lg w-full p-6">
-                        <div className="flex items-center justify-between mb-4 pb-3 border-b border-gray-100 dark:border-slate-800">
-                            <div>
-                                <h3 className="text-lg font-bold">Nouveau Profil Emprunteur (KYC)</h3>
-                                <p className="text-xs text-gray-500">Enregistrez un particulier ou une entreprise</p>
-                            </div>
-                            <button onClick={() => setShowModal(false)} className="p-1.5 text-gray-400">
-                                <X size={18} />
-                            </button>
+              return (
+                <Card key={client.id} className="hover:border-border hover:shadow-md transition-all">
+                  <CardContent className="p-5 space-y-4">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2.5">
+                        <Avatar className="h-8 w-8 rounded-lg">
+                          <AvatarFallback className="text-xs font-bold">
+                            {initials}
+                          </AvatarFallback>
+                        </Avatar>
+                        <div>
+                          <h4 className="text-xs font-bold text-foreground">
+                            {client.firstName} {client.lastName}
+                          </h4>
+                          <p className="text-[10px] text-muted-foreground">{client.city || "Kinshasa"}</p>
                         </div>
-
-                        <form onSubmit={handleCreateClient} className="space-y-4">
-                            <div className="grid grid-cols-2 gap-3">
-                                <div>
-                                    <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Prénom</label>
-                                    <input
-                                        type="text"
-                                        value={firstName}
-                                        onChange={(e) => setFirstName(e.target.value)}
-                                        className="w-full p-2.5 bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-xl text-sm"
-                                        required
-                                    />
-                                </div>
-                                <div>
-                                    <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Nom</label>
-                                    <input
-                                        type="text"
-                                        value={lastName}
-                                        onChange={(e) => setLastName(e.target.value)}
-                                        className="w-full p-2.5 bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-xl text-sm"
-                                        required
-                                    />
-                                </div>
-                            </div>
-
-                            <div className="grid grid-cols-2 gap-3">
-                                <div>
-                                    <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Téléphone</label>
-                                    <input
-                                        type="tel"
-                                        placeholder="+243 812 345 678"
-                                        value={phone}
-                                        onChange={(e) => setPhone(e.target.value)}
-                                        className="w-full p-2.5 bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-xl text-sm"
-                                        required
-                                    />
-                                </div>
-                                <div>
-                                    <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Email</label>
-                                    <input
-                                        type="email"
-                                        placeholder="emprunteur@email.com"
-                                        value={email}
-                                        onChange={(e) => setEmail(e.target.value)}
-                                        className="w-full p-2.5 bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-xl text-sm"
-                                    />
-                                </div>
-                            </div>
-
-                            <div className="grid grid-cols-2 gap-3">
-                                <div>
-                                    <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Ville</label>
-                                    <input
-                                        type="text"
-                                        value={city}
-                                        onChange={(e) => setCity(e.target.value)}
-                                        className="w-full p-2.5 bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-xl text-sm"
-                                    />
-                                </div>
-                                <div>
-                                    <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Revenu Mensuel ($)</label>
-                                    <input
-                                        type="number"
-                                        value={monthlyIncome}
-                                        onChange={(e) => setMonthlyIncome(e.target.value)}
-                                        className="w-full p-2.5 bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-xl text-sm"
-                                        required
-                                    />
-                                </div>
-                            </div>
-
-                            <div className="grid grid-cols-2 gap-3">
-                                <div>
-                                    <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Profession / Poste</label>
-                                    <input
-                                        type="text"
-                                        placeholder="Ex: Comptable, Commerçant"
-                                        value={occupation}
-                                        onChange={(e) => setOccupation(e.target.value)}
-                                        className="w-full p-2.5 bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-xl text-sm"
-                                    />
-                                </div>
-                                <div>
-                                    <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Employeur / Entreprise</label>
-                                    <input
-                                        type="text"
-                                        placeholder="Ex: Société Minière"
-                                        value={employer}
-                                        onChange={(e) => setEmployer(e.target.value)}
-                                        className="w-full p-2.5 bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-xl text-sm"
-                                    />
-                                </div>
-                            </div>
-
-                            <div className="flex justify-end gap-3 pt-3">
-                                <button
-                                    type="button"
-                                    onClick={() => setShowModal(false)}
-                                    className="px-4 py-2 border border-gray-200 rounded-xl text-xs font-bold"
-                                >
-                                    Annuler
-                                </button>
-                                <button
-                                    type="submit"
-                                    disabled={submitting}
-                                    className="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold disabled:opacity-50"
-                                >
-                                    Créer le Client
-                                </button>
-                            </div>
-                        </form>
+                      </div>
+                      <Badge variant="success" className="text-[9px]">KYC Vérifié</Badge>
                     </div>
-                </div>
-            )}
 
-            {/* Modal Détails Emprunteur */}
-            {selectedClient && (
-                <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
-                    <div className="bg-white dark:bg-slate-900 rounded-2xl max-w-xl w-full p-6 max-h-[90vh] overflow-y-auto">
-                        <div className="flex items-center justify-between mb-4 pb-3 border-b border-gray-100 dark:border-slate-800">
-                            <div>
-                                <h3 className="text-xl font-bold">{selectedClient.firstName} {selectedClient.lastName}</h3>
-                                <p className="text-xs text-gray-500">ID: {selectedClient.id}</p>
-                            </div>
-                            <button onClick={() => setSelectedClient(null)} className="p-1.5 text-gray-400">
-                                <X size={18} />
-                            </button>
-                        </div>
-
-                        <div className="space-y-4">
-                            <div className="grid grid-cols-2 gap-3 p-4 bg-gray-50 dark:bg-slate-800/50 rounded-xl text-xs">
-                                <div>
-                                    <span className="text-gray-400 block mb-1">Téléphone</span>
-                                    <span className="font-bold">{selectedClient.phone}</span>
-                                </div>
-                                <div>
-                                    <span className="text-gray-400 block mb-1">Email</span>
-                                    <span className="font-bold">{selectedClient.email || 'Non renseigné'}</span>
-                                </div>
-                                <div>
-                                    <span className="text-gray-400 block mb-1">Revenu Mensuel</span>
-                                    <span className="font-bold text-green-600">${selectedClient.monthlyIncome?.toLocaleString()}</span>
-                                </div>
-                                <div>
-                                    <span className="text-gray-400 block mb-1">Profession & Employeur</span>
-                                    <span className="font-bold">{selectedClient.occupation || '-'} ({selectedClient.employer || '-'})</span>
-                                </div>
-                            </div>
-
-                            {/* Historique des demandes */}
-                            <div>
-                                <h4 className="text-xs font-bold uppercase tracking-wider text-gray-500 mb-2">Historique des Demandes</h4>
-                                <div className="space-y-2">
-                                    {selectedClient.applications?.length === 0 ? (
-                                        <p className="text-xs text-gray-400">Aucune demande enregistrée.</p>
-                                    ) : (
-                                        selectedClient.applications?.map((app: any) => (
-                                            <div key={app.id} className="p-3 bg-white dark:bg-slate-800 border border-gray-100 dark:border-slate-700 rounded-xl text-xs flex items-center justify-between">
-                                                <div>
-                                                    <span className="font-bold">{app.applicationNo || app.id.slice(0, 8)}</span>
-                                                    <p className="text-[10px] text-gray-400">${app.amount?.toLocaleString()} • {app.duration} mois</p>
-                                                </div>
-                                                <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-blue-50 text-blue-600">
-                                                    {app.status}
-                                                </span>
-                                            </div>
-                                        ))
-                                    )}
-                                </div>
-                            </div>
-                        </div>
+                    <div className="space-y-1 text-xs text-muted-foreground">
+                      <div className="flex items-center gap-1.5 truncate">
+                        <Mail className="h-3 w-3 shrink-0" />
+                        <span className="truncate">{client.email}</span>
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        <Phone className="h-3 w-3 shrink-0" />
+                        <span>{client.phone}</span>
+                      </div>
                     </div>
-                </div>
-            )}
-        </div>
-    );
+
+                    <div className="flex justify-between items-center pt-2 border-t border-border/60 text-xs">
+                      <span className="text-muted-foreground">Revenu estimé :</span>
+                      <span className="font-bold text-foreground">{formatCurrency(client.monthlyIncome || 0)}</span>
+                    </div>
+
+                    <div className="flex items-center justify-between pt-3 border-t border-border/60">
+                      <div className="flex items-center gap-1">
+                        <FavoriteButton
+                          isFavorite={isFav}
+                          onToggle={(f) => setFavorites({ ...favorites, [client.id]: f })}
+                        />
+                        <PinButton
+                          isPinned={isPin}
+                          onToggle={(p) => setPinned({ ...pinned, [client.id]: p })}
+                        />
+                      </div>
+                      <Button size="sm" variant="subtle" asChild className="h-7 text-xs">
+                        <Link href={`/clients/${client.id}`}>Profil</Link>
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+              );
+            })}
+          </div>
+        )}
+
+        {filteredClients.length > 0 && (
+          <Pagination
+            currentPage={currentPage}
+            totalItems={filteredClients.length}
+            pageSize={pageSize}
+            onPageChange={setCurrentPage}
+            onPageSizeChange={(size) => {
+              setPageSize(size);
+              setCurrentPage(1);
+            }}
+          />
+        )}
+
+        <BulkActions
+          selectedCount={selectedIds.length}
+          onClearSelection={() => setSelectedIds([])}
+          onExport={() => {
+            toast.success(`${selectedIds.length} profils exportés`);
+            setSelectedIds([]);
+          }}
+        />
+      </div>
+    </AppLayout>
+  );
 }

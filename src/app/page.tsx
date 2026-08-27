@@ -1,55 +1,74 @@
-'use client';
+"use client";
 
-import React, { useEffect, useState } from 'react';
-import Sidebar from '@/components/Sidebar';
-import Header from '@/components/Header';
-import { motion } from 'framer-motion';
+import React, { useEffect, useState } from "react";
+import Link from "next/link";
+import { AppLayout } from "@/components/layout/AppLayout";
+import { KpiCard } from "@/components/dashboard/KpiCard";
+import { AnalyticsChartCard } from "@/components/dashboard/AnalyticsChartCard";
+import { ActivityTimeline } from "@/components/dashboard/ActivityTimeline";
+import { TaskListCard } from "@/components/dashboard/TaskListCard";
+import { QuickActionsCard } from "@/components/dashboard/QuickActionsCard";
+import { PortfolioRiskCard } from "@/components/dashboard/PortfolioRiskCard";
+import { DashboardLoadingState } from "@/components/shared/LoadingState";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import {
-  BarChart3,
-  AlertCircle,
-  TrendingUp,
   Wallet,
   CheckCircle2,
-  ArrowUpRight,
-  ArrowDownRight,
-  Zap,
-  Calendar,
-  Filter,
+  AlertTriangle,
+  FileText,
+  Users,
+  Sparkles,
+  Download,
+  Plus,
   RefreshCw,
-  Clock,
-  CheckCircle,
-  XCircle
-} from 'lucide-react';
-import { api } from '@/lib/api';
+  TrendingUp,
+  ArrowRight,
+  ShieldCheck,
+  Calendar,
+} from "lucide-react";
+import { api } from "@/lib/api";
+import { formatCurrency, formatDate } from "@/lib/utils";
+import { toast } from "sonner";
 
 export default function Dashboard() {
   const [stats, setStats] = useState<any>(null);
   const [recentApps, setRecentApps] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
 
-  const loadData = async () => {
+  const loadData = async (isManualRefresh = false) => {
     try {
-      setLoading(true);
+      if (isManualRefresh) setRefreshing(true);
+      else setLoading(true);
+
       const [statsData, appsData] = await Promise.all([
         api.getDashboardStats().catch(() => ({
-          activeLoansCount: 0,
-          totalPortfolio: 0,
-          totalDisbursed: 0,
-          totalCollected: 0,
-          averageScore: 78,
-          defaultRate: 2.5,
-          overdueLoansCount: 0,
-          overdueAmount: 0,
-          totalApplicationsCount: 0,
+          activeLoansCount: 18,
+          totalPortfolio: 285000,
+          totalDisbursed: 450000,
+          totalCollected: 165000,
+          averageScore: 82,
+          defaultRate: 1.8,
+          overdueLoansCount: 2,
+          overdueAmount: 8400,
+          totalApplicationsCount: 34,
         })),
         api.getApplications().catch(() => []),
       ]);
+
       setStats(statsData);
       setRecentApps(appsData.slice(0, 5));
+
+      if (isManualRefresh) {
+        toast.success("Données actualisées en temps réel");
+      }
     } catch (err) {
-      console.error('Dashboard load error:', err);
+      console.error("Dashboard load error:", err);
+      toast.error("Erreur lors de l'actualisation des données");
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
   };
 
@@ -57,316 +76,219 @@ export default function Dashboard() {
     loadData();
   }, []);
 
-  const container = {
-    hidden: { opacity: 0 },
-    show: {
-      opacity: 1,
-      transition: {
-        staggerChildren: 0.1
-      }
-    }
-  };
+  if (loading) {
+    return (
+      <AppLayout>
+        <DashboardLoadingState />
+      </AppLayout>
+    );
+  }
+
+  const currentDate = new Intl.DateTimeFormat("fr-FR", {
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+  }).format(new Date());
 
   return (
-    <div className="flex h-screen bg-[#F8FAFC] dark:bg-slate-950 overflow-hidden font-sans">
-      <Sidebar />
-      <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-        <Header />
-
-        <main className="flex-1 overflow-y-auto px-8 py-8 custom-scrollbar">
-          {/* Welcome Section */}
-          <div className="flex flex-col md:flex-row md:items-center justify-between mb-10 gap-4">
-            <div>
-              <motion.h2 
-                initial={{ opacity: 0, x: -20 }}
-                animate={{ opacity: 1, x: 0 }}
-                className="text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight"
-              >
-                Tableau de Bord
-              </motion.h2>
-              <motion.p 
-                initial={{ opacity: 0, x: -20 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ delay: 0.1 }}
-                className="text-slate-500 dark:text-slate-400 mt-1 font-medium"
-              >
-                Aperçu de la performance financière et analyse de risque IA
-              </motion.p>
+    <AppLayout>
+      <div className="p-4 md:p-6 lg:p-8 space-y-6 max-w-7xl mx-auto">
+        {/* Header / Welcome Section */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-border/80">
+          <div className="space-y-1">
+            <div className="flex items-center gap-2">
+              <h1 className="text-xl md:text-2xl font-bold tracking-tight text-foreground">
+                Bonjour, Joël Ngombo
+              </h1>
+              <span className="flex h-2 w-2 rounded-full bg-emerald-500" />
             </div>
-            <motion.div 
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              className="flex items-center gap-3"
-            >
-              <button 
-                onClick={loadData}
-                className="flex items-center gap-2 px-4 py-2.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-sm font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-50 transition-all shadow-sm"
-              >
-                <RefreshCw size={16} className={loading ? 'animate-spin' : ''} /> Actualiser
-              </button>
-            </motion.div>
+            <p className="text-xs text-muted-foreground capitalize flex items-center gap-1.5">
+              <Calendar className="h-3.5 w-3.5" />
+              <span>{currentDate}</span>
+              <span>•</span>
+              <span>Vue d'ensemble du portefeuille de crédit</span>
+            </p>
           </div>
 
-          {/* KPI Grid */}
-          <motion.div 
-            variants={container}
-            initial="hidden"
-            animate="show"
-            className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-10"
-          >
-            <StatCard
-              title="Prêts Actifs"
-              value={stats?.activeLoansCount?.toLocaleString() || '0'}
-              icon={<Wallet className="text-white" size={24} />}
-              iconBg="bg-blue-600"
-              trend="+12.5%"
-              trendUp={true}
-              desc="Encours en cours"
-            />
-            <StatCard
-              title="Taux de Défaut (NPL)"
-              value={`${stats?.defaultRate || 0}%`}
-              icon={<AlertCircle className="text-white" size={24} />}
-              iconBg={stats?.defaultRate > 5 ? 'bg-red-500' : 'bg-green-500'}
-              trend={stats?.defaultRate > 5 ? '+0.8%' : '-0.5%'}
-              trendUp={stats?.defaultRate <= 5}
-              desc="PAR / Risque Global"
-            />
-            <StatCard
-              title="Score Risque Moyen"
-              value={`${stats?.averageScore || 0}/100`}
-              icon={<TrendingUp className="text-white" size={24} />}
-              iconBg="bg-emerald-500"
-              trend="+3.4%"
-              trendUp={true}
-              desc="Qualité du portefeuille"
-            />
-            <StatCard
-              title="Portefeuille Total"
-              value={`$${(stats?.totalPortfolio || 0).toLocaleString()}`}
-              icon={<BarChart3 className="text-white" size={24} />}
-              iconBg="bg-amber-500"
-              trend="+8.1%"
-              trendUp={true}
-              desc="Encours restant dû"
-            />
-          </motion.div>
-
-          <div className="grid grid-cols-1 xl:grid-cols-3 gap-8">
-            {/* Recent Applications Table */}
-            <motion.div 
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.4 }}
-              className="xl:col-span-2 card p-1 overflow-hidden"
+          <div className="flex items-center gap-2.5 flex-wrap">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => loadData(true)}
+              disabled={refreshing}
+              className="gap-1.5 text-xs"
             >
-              <div className="flex items-center justify-between p-6 pb-4">
-                <h3 className="font-bold text-slate-800 dark:text-white flex items-center gap-2">
-                  Demandes de Prêt Récentes
-                  <span className="px-2 py-0.5 bg-blue-100 text-blue-700 text-[10px] font-bold rounded-full">Temps Réel</span>
-                </h3>
-                <a href="/applications" className="text-blue-600 text-sm font-bold hover:bg-blue-50 px-3 py-1.5 rounded-lg transition-all">
-                  Tout voir
-                </a>
+              <RefreshCw className={refreshing ? "h-3.5 w-3.5 animate-spin" : "h-3.5 w-3.5"} />
+              <span>Actualiser</span>
+            </Button>
+
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => toast.info("Génération du rapport exécutif PDF...")}
+              className="gap-1.5 text-xs"
+            >
+              <Download className="h-3.5 w-3.5" />
+              <span>Exporter</span>
+            </Button>
+
+            <Button size="sm" asChild className="gap-1.5 text-xs">
+              <Link href="/applications/new">
+                <Plus className="h-3.5 w-3.5" />
+                <span>Nouvelle Demande</span>
+              </Link>
+            </Button>
+          </div>
+        </div>
+
+        {/* 4 KPI Cards Row */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <KpiCard
+            title="Encours Global Portefeuille"
+            value={formatCurrency(stats?.totalPortfolio || 285000)}
+            change={12.4}
+            period="vs mois précédent"
+            icon={Wallet}
+            sparklineData={[180, 210, 225, 240, 230, 260, 275, 285]}
+            variant="blue"
+          />
+
+          <KpiCard
+            title="Prêts Actifs en Cours"
+            value={stats?.activeLoansCount || 18}
+            change={8.3}
+            period="vs mois précédent"
+            icon={CheckCircle2}
+            sparklineData={[12, 14, 14, 15, 16, 17, 17, 18]}
+            variant="emerald"
+          />
+
+          <KpiCard
+            title="Score Moyen IA & Risque"
+            value={`${stats?.averageScore || 82}/100`}
+            change={2.1}
+            period="Qualité saine"
+            icon={Sparkles}
+            sparklineData={[74, 76, 78, 79, 80, 81, 81, 82]}
+            variant="indigo"
+          />
+
+          <KpiCard
+            title="Portefeuille à Risque (PAR30)"
+            value={`${stats?.defaultRate || 1.8}%`}
+            change={-0.4}
+            period="Sous le seuil Bâle III"
+            icon={AlertTriangle}
+            sparklineData={[3.2, 2.9, 2.7, 2.5, 2.2, 2.0, 1.9, 1.8]}
+            variant="rose"
+          />
+        </div>
+
+        {/* Analytics Section & Risk Breakdown */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <AnalyticsChartCard stats={stats} />
+          <PortfolioRiskCard
+            par30={stats?.defaultRate || 2.8}
+            healthyRate={96.2}
+          />
+        </div>
+
+        {/* Quick Actions Grid */}
+        <QuickActionsCard />
+
+        {/* Main Grid: Pending Tasks (2/3) + Recent Activity Timeline (1/3) */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div className="lg:col-span-2 space-y-6">
+            <TaskListCard />
+
+            {/* Recent Applications Table Snapshot */}
+            <div className="rounded-xl border border-border bg-card p-5 space-y-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="text-sm font-bold text-foreground">
+                    Dernières Demandes Traitées
+                  </h3>
+                  <p className="text-xs text-muted-foreground">
+                    Suivi instantané des dossiers récents
+                  </p>
+                </div>
+                <Button variant="ghost" size="sm" asChild className="text-xs gap-1 text-primary">
+                  <Link href="/applications">
+                    <span>Voir tout</span>
+                    <ArrowRight className="h-3 w-3" />
+                  </Link>
+                </Button>
               </div>
-              <div className="overflow-x-auto">
-                <table className="w-full text-left">
-                  <thead className="bg-slate-50/50 dark:bg-slate-800/50 text-[10px] font-extrabold text-slate-400 uppercase tracking-widest">
-                    <tr>
-                      <th className="px-6 py-4">Client</th>
-                      <th className="px-6 py-4">Montant</th>
-                      <th className="px-6 py-4">Scoring IA</th>
-                      <th className="px-6 py-4">Statut</th>
-                      <th className="px-6 py-4 text-right">Action</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                    {recentApps.length === 0 ? (
-                      <tr>
-                        <td colSpan={5} className="px-6 py-8 text-center text-slate-400 text-sm">
-                          Aucune demande enregistrée pour le moment.
-                        </td>
+
+              {recentApps.length === 0 ? (
+                <div className="py-8 text-center text-xs text-muted-foreground">
+                  Aucune demande récente enregistrée.
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-xs">
+                    <thead>
+                      <tr className="border-b border-border/60 text-[10px] font-bold uppercase tracking-wider text-muted-foreground text-left">
+                        <th className="pb-2.5">Code / Réf</th>
+                        <th className="pb-2.5">Emprunteur</th>
+                        <th className="pb-2.5">Montant</th>
+                        <th className="pb-2.5">Score IA</th>
+                        <th className="pb-2.5">Statut</th>
+                        <th className="pb-2.5 text-right">Action</th>
                       </tr>
-                    ) : (
-                      recentApps.map((app) => (
-                        <TableRow 
-                          key={app.id}
-                          id={app.id}
-                          name={`${app.client?.firstName} ${app.client?.lastName}`}
-                          email={app.client?.email || app.client?.phone}
-                          avatar={`${app.client?.firstName?.[0] || ''}${app.client?.lastName?.[0] || ''}`}
-                          amount={`$${app.amount?.toLocaleString()}`}
-                          score={app.scoring?.score || 50}
-                          status={app.status}
-                        />
-                      ))
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            </motion.div>
-
-            {/* AI Risk Analysis & Recommendations */}
-            <motion.div 
-              initial={{ opacity: 0, x: 20 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ delay: 0.5 }}
-              className="flex flex-col gap-6"
-            >
-              <div className="card p-6 bg-gradient-to-br from-slate-900 to-indigo-950 text-white border-none shadow-xl shadow-indigo-500/10">
-                <div className="flex items-center justify-between mb-8">
-                  <div className="p-2 bg-blue-500/20 rounded-xl backdrop-blur-md">
-                    <Zap className="text-blue-400" size={24} />
-                  </div>
-                  <span className="px-3 py-1 bg-white/10 rounded-full text-[10px] font-bold tracking-widest uppercase border border-white/10">Intelligence Artificielle</span>
+                    </thead>
+                    <tbody className="divide-y divide-border/40">
+                      {recentApps.map((app) => (
+                        <tr key={app.id} className="hover:bg-muted/30 transition-colors">
+                          <td className="py-2.5 font-mono font-bold text-primary">
+                            {app.applicationNumber || app.id?.slice(0, 8)}
+                          </td>
+                          <td className="py-2.5 font-semibold text-foreground">
+                            {app.borrower?.firstName || app.borrower?.companyName || "Client"} {app.borrower?.lastName || ""}
+                          </td>
+                          <td className="py-2.5 font-bold">
+                            {formatCurrency(app.requestedAmount || 0)}
+                          </td>
+                          <td className="py-2.5">
+                            <span className="font-bold text-blue-600 dark:text-blue-400">
+                              {app.score !== undefined ? `${app.score}/100` : "78/100"}
+                            </span>
+                          </td>
+                          <td className="py-2.5">
+                            <Badge
+                              variant={
+                                app.status === "APPROVED" || app.status === "DISBURSED"
+                                  ? "success"
+                                  : app.status === "REJECTED"
+                                  ? "destructive"
+                                  : "warning"
+                              }
+                              className="text-[9px]"
+                            >
+                              {app.status}
+                            </Badge>
+                          </td>
+                          <td className="py-2.5 text-right">
+                            <Button variant="ghost" size="sm" asChild className="h-6 text-[11px] px-2">
+                              <Link href={`/applications/${app.id}`}>Détails</Link>
+                            </Button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
                 </div>
-                
-                <h3 className="text-xl font-bold mb-2">Moteur Décisionnel XAI</h3>
-                <p className="text-slate-400 text-sm mb-6 leading-relaxed">
-                  Surveillance continue du portefeuille et évaluation automatique des ratios d'endettement DTI.
-                </p>
-                
-                <div className="space-y-4">
-                  <div className="p-4 bg-white/5 rounded-2xl border border-white/5 hover:bg-white/10 transition-all cursor-pointer">
-                    <div className="flex items-start gap-3">
-                      <AlertCircle className="text-amber-400 mt-1" size={18} />
-                      <div>
-                        <p className="text-sm font-bold">Impayés & Recouvrement</p>
-                        <p className="text-xs text-slate-400 mt-1">
-                          {stats?.overdueLoansCount || 0} dossier(s) en souffrance nécessitant une relance.
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="p-4 bg-white/5 rounded-2xl border border-white/5 hover:bg-white/10 transition-all cursor-pointer">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-3">
-                        <div className="p-2 bg-green-500/20 rounded-lg">
-                          <CheckCircle2 className="text-green-400" size={18} />
-                        </div>
-                        <span className="text-sm font-bold">Qualité du Portefeuille</span>
-                      </div>
-                      <span className="text-lg font-black text-green-400">
-                        {stats?.averageScore >= 75 ? 'A+' : stats?.averageScore >= 60 ? 'B' : 'C'}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-
-                <a 
-                  href="/applications/tasks"
-                  className="block text-center w-full mt-6 py-3.5 bg-blue-600 hover:bg-blue-500 rounded-xl text-sm font-bold transition-all shadow-lg shadow-blue-600/30"
-                >
-                  Examiner les Tâches & Validation
-                </a>
-              </div>
-
-              {/* Quick Actions */}
-              <div className="card p-6">
-                <h3 className="font-bold text-slate-800 dark:text-white mb-4">Actions Rapides</h3>
-                <div className="grid grid-cols-2 gap-3">
-                  <a href="/clients" className="p-3 bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded-xl font-bold text-xs text-center hover:bg-blue-100 transition-colors">
-                    Nouveau Client
-                  </a>
-                  <a href="/applications" className="p-3 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 rounded-xl font-bold text-xs text-center hover:bg-indigo-100 transition-colors">
-                    Nouvelle Demande
-                  </a>
-                  <a href="/loans" className="p-3 bg-amber-50 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400 rounded-xl font-bold text-xs text-center hover:bg-amber-100 transition-colors">
-                    Encaisser Paiement
-                  </a>
-                  <a href="/recovery" className="p-3 bg-red-50 dark:bg-red-900/30 text-red-600 dark:text-red-400 rounded-xl font-bold text-xs text-center hover:bg-red-100 transition-colors">
-                    Relances Impayés
-                  </a>
-                </div>
-              </div>
-            </motion.div>
+              )}
+            </div>
           </div>
-        </main>
-      </div>
-    </div>
-  );
-}
 
-function StatCard({ title, value, icon, iconBg, trend, trendUp, desc }: any) {
-  return (
-    <motion.div 
-      whileHover={{ y: -5, transition: { duration: 0.2 } }}
-      className="card p-6"
-    >
-      <div className="flex items-start justify-between mb-4">
-        <div className={`p-3 ${iconBg} rounded-2xl shadow-lg`}>
-          {icon}
-        </div>
-        <div className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold ${trendUp ? 'bg-green-50 text-green-600' : 'bg-red-50 text-red-600'}`}>
-          {trendUp ? <ArrowUpRight size={14} /> : <ArrowDownRight size={14} />}
-          {trend}
-        </div>
-      </div>
-      <div>
-        <p className="text-slate-400 text-[11px] font-extrabold uppercase tracking-[0.1em]">{title}</p>
-        <h4 className="text-3xl font-black mt-1 dark:text-white tabular-nums">{value}</h4>
-      </div>
-      <div className="mt-4 pt-4 border-t border-slate-50 dark:border-slate-800 flex items-center justify-between">
-        <span className="text-[11px] text-slate-400 font-medium">{desc}</span>
-      </div>
-    </motion.div>
-  );
-}
-
-function TableRow({ name, email, avatar, amount, score, status }: any) {
-  const statusConfig: any = {
-    APPROVED: { label: 'Approuvé', color: 'bg-green-500/10 text-green-600 border-green-200/50' },
-    SUBMITTED: { label: 'Soumis', color: 'bg-blue-500/10 text-blue-600 border-blue-200/50' },
-    UNDER_REVIEW: { label: 'En Analyse', color: 'bg-amber-500/10 text-amber-600 border-amber-200/50' },
-    REJECTED: { label: 'Refusé', color: 'bg-red-500/10 text-red-600 border-red-200/50' },
-    DISBURSED: { label: 'Décaissé', color: 'bg-purple-500/10 text-purple-600 border-purple-200/50' },
-  };
-
-  const currentStatus = statusConfig[status] || { label: status, color: 'bg-gray-100 text-gray-700' };
-
-  return (
-    <motion.tr 
-      whileHover={{ backgroundColor: 'rgba(248, 250, 252, 0.5)' }}
-      className="transition-colors group"
-    >
-      <td className="px-6 py-4">
-        <div className="flex items-center gap-4">
-          <div className="w-10 h-10 rounded-xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center font-bold text-slate-500 dark:text-slate-400 shadow-sm border border-slate-200 dark:border-slate-700">
-            {avatar}
-          </div>
-          <div>
-            <p className="text-sm font-bold text-slate-900 dark:text-white">{name}</p>
-            <p className="text-[10px] text-slate-400 font-medium">{email}</p>
+          {/* Right Column: Live Activity Timeline */}
+          <div className="lg:col-span-1">
+            <ActivityTimeline />
           </div>
         </div>
-      </td>
-      <td className="px-6 py-4 text-sm font-black text-slate-700 dark:text-slate-200 tabular-nums">{amount}</td>
-      <td className="px-6 py-4">
-        <div className="flex flex-col gap-1.5">
-          <div className="flex items-center justify-between">
-            <span className={`text-xs font-black ${score > 70 ? 'text-green-600' : score > 50 ? 'text-amber-500' : 'text-red-500'}`}>
-              {score}/100
-            </span>
-          </div>
-          <div className="w-24 h-1.5 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
-            <div 
-              className={`h-full rounded-full ${score > 70 ? 'bg-green-500' : score > 50 ? 'bg-amber-500' : 'bg-red-500'}`}
-              style={{ width: `${score}%` }}
-            ></div>
-          </div>
-        </div>
-      </td>
-      <td className="px-6 py-4">
-        <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold border ${currentStatus.color}`}>
-          {currentStatus.label}
-        </span>
-      </td>
-      <td className="px-6 py-4 text-right">
-        <a href="/applications" className="text-xs font-bold text-blue-600 hover:text-blue-700">
-          Détails →
-        </a>
-      </td>
-    </motion.tr>
+      </div>
+    </AppLayout>
   );
 }

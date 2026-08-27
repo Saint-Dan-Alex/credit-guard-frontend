@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
+import { ThemeProvider } from "@/components/theme-provider";
+import { Toaster } from "@/components/ui/toaster";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -8,8 +10,8 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "CreditGuard | Intelligent Lending Hub",
-  description: "Plateforme Intelligente d'Analyse et de Gestion des Crédits",
+  title: "CreditGuard | Enterprise Lending & HRBAC Hub",
+  description: "Plateforme Intelligente d'Analyse Financière, Décision de Crédit & Gestion des Accès",
 };
 
 export default function RootLayout({
@@ -18,8 +20,18 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="fr" className={`${inter.variable} h-full antialiased`}>
-      <body className="h-full font-sans">{children}</body>
+    <html lang="fr" suppressHydrationWarning className={`${inter.variable} h-full antialiased`}>
+      <body className="h-full font-sans bg-background text-foreground">
+        <ThemeProvider
+          attribute="class"
+          defaultTheme="system"
+          enableSystem
+          disableTransitionOnChange
+        >
+          {children}
+          <Toaster position="top-right" richColors closeButton />
+        </ThemeProvider>
+      </body>
     </html>
   );
 }

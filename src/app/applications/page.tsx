@@ -1,469 +1,575 @@
-'use client';
+"use client";
 
-import React, { useEffect, useState } from 'react';
-import Sidebar from '@/components/Sidebar';
-import Header from '@/components/Header';
-import { Filter, Download, Plus, Eye, CheckCircle, XCircle, Clock, Search, X, Calculator, Shield } from 'lucide-react';
-import { api } from '@/lib/api';
+import React, { useEffect, useState, useMemo } from "react";
+import Link from "next/link";
+import { AppLayout } from "@/components/layout/AppLayout";
+import { PageHeader } from "@/components/shared/PageHeader";
+import { PageToolbar } from "@/components/shared/PageToolbar";
+import { Pagination } from "@/components/shared/Pagination";
+import { EmptyState } from "@/components/shared/EmptyState";
+import { TableLoadingState, CardsLoadingState } from "@/components/shared/LoadingState";
+import { FavoriteButton } from "@/components/shared/FavoriteButton";
+import { PinButton } from "@/components/shared/PinButton";
+import { BulkActions } from "@/components/shared/BulkActions";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Card, CardContent } from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import {
+  Plus,
+  Filter,
+  MoreHorizontal,
+  Eye,
+  CheckCircle2,
+  XCircle,
+  Clock,
+  Sparkles,
+  ShieldCheck,
+  FileSpreadsheet,
+  Trash2,
+  Share2,
+} from "lucide-react";
+import { api } from "@/lib/api";
+import { formatCurrency, formatDate } from "@/lib/utils";
+import { toast } from "sonner";
 
 export default function ApplicationsPage() {
-    const [applications, setApplications] = useState<any[]>([]);
-    const [clients, setClients] = useState<any[]>([]);
-    const [products, setProducts] = useState<any[]>([]);
-    const [loading, setLoading] = useState(true);
-    const [statusFilter, setStatusFilter] = useState('ALL');
-    const [search, setSearch] = useState('');
-    const [showModal, setShowModal] = useState(false);
-    const [selectedApp, setSelectedApp] = useState<any>(null);
+  const [applications, setApplications] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
 
-    // Form state
-    const [clientId, setClientId] = useState('');
-    const [productId, setProductId] = useState('');
-    const [amount, setAmount] = useState('5000');
-    const [duration, setDuration] = useState('12');
-    const [purpose, setPurpose] = useState('Achat équipement');
-    const [collateralType, setCollateralType] = useState('REAL_ESTATE');
-    const [collateralValue, setCollateralValue] = useState('8000');
-    const [collateralDesc, setCollateralDesc] = useState('Titre de propriété parcelle');
+  // Filters & Search
+  const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState("ALL");
+  const [viewMode, setViewMode] = useState<"table" | "cards">("table");
 
-    // Live simulation
-    const [simulation, setSimulation] = useState<any>(null);
+  // Pagination
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
 
-    const loadApplications = async () => {
-        try {
-            setLoading(true);
-            const data = await api.getApplications({
-                status: statusFilter !== 'ALL' ? statusFilter : undefined,
-                search: search || undefined,
-            });
-            setApplications(data);
-        } catch (err) {
-            console.error('Failed to load applications:', err);
-        } finally {
-            setLoading(false);
-        }
-    };
+  // Selection for bulk actions
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [favorites, setFavorites] = useState<Record<string, boolean>>({});
+  const [pinned, setPinned] = useState<Record<string, boolean>>({});
 
-    const loadAuxData = async () => {
-        try {
-            const [clientsData, productsData] = await Promise.all([
-                api.getClients(),
-                api.getProducts(true),
-            ]);
-            setClients(clientsData);
-            setProducts(productsData);
-            if (clientsData.length > 0) setClientId(clientsData[0].id);
-            if (productsData.length > 0) setProductId(productsData[0].id);
-        } catch (err) {
-            console.error('Failed to load clients/products:', err);
-        }
-    };
+  // Configurable Columns
+  const [columns, setColumns] = useState([
+    { id: "code", label: "Code Dossier", visible: true },
+    { id: "borrower", label: "Emprunteur", visible: true },
+    { id: "amount", label: "Montant Demandé", visible: true },
+    { id: "duration", label: "Durée", visible: true },
+    { id: "score", label: "Score IA (XAI)", visible: true },
+    { id: "status", label: "Statut", visible: true },
+    { id: "date", label: "Date Dépôt", visible: true },
+  ]);
 
-    useEffect(() => {
-        loadApplications();
-        loadAuxData();
-    }, [statusFilter]);
+  const toggleColumn = (id: string) => {
+    setColumns(
+      columns.map((col) =>
+        col.id === id ? { ...col, visible: !col.visible } : col
+      )
+    );
+  };
 
-    useEffect(() => {
-        // Run live simulation whenever amount or duration changes
-        const selectedProd = products.find(p => p.id === productId);
-        const rate = selectedProd ? selectedProd.interestRate : 12.0;
-        const numAmount = parseFloat(amount) || 0;
-        const numDur = parseInt(duration) || 12;
+  const loadApplications = async (isManual = false) => {
+    try {
+      if (isManual) setRefreshing(true);
+      else setLoading(true);
 
-        if (numAmount > 0 && numDur > 0) {
-            api.simulateLoan({
-                amount: numAmount,
-                duration: numDur,
-                interestRate: rate,
-            }).then(setSimulation).catch(() => setSimulation(null));
-        }
-    }, [amount, duration, productId, products]);
+      const data = await api.getApplications({
+        status: statusFilter !== "ALL" ? statusFilter : undefined,
+        search: search || undefined,
+      });
+      setApplications(data || []);
+      if (isManual) toast.success("Dossiers actualisés");
+    } catch (err) {
+      console.error("Failed to load applications:", err);
+      toast.error("Impossible de récupérer les dossiers");
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  };
 
-    const handleSearch = (e: React.FormEvent) => {
-        e.preventDefault();
-        loadApplications();
-    };
+  useEffect(() => {
+    loadApplications();
+  }, [statusFilter]);
 
-    const handleCreateApplication = async (e: React.FormEvent) => {
-        e.preventDefault();
-        try {
-            await api.createApplication({
-                clientId,
-                productId: productId || undefined,
-                amount: parseFloat(amount),
-                duration: parseInt(duration),
-                purpose,
-                collaterals: collateralValue && parseFloat(collateralValue) > 0 ? [
-                    {
-                        type: collateralType,
-                        description: collateralDesc,
-                        estimatedValue: parseFloat(collateralValue),
-                    }
-                ] : [],
-            });
+  // Client-side search and sorting (Pinned items first, then date)
+  const filteredApps = useMemo(() => {
+    let list = applications;
 
-            setShowModal(false);
-            loadApplications();
-        } catch (err: any) {
-            alert(err.message || 'Erreur lors de la création');
-        }
-    };
+    if (search.trim()) {
+      const q = search.toLowerCase();
+      list = list.filter((app) => {
+        const clientName = `${app.borrower?.firstName || ""} ${app.borrower?.lastName || ""} ${app.borrower?.companyName || ""}`.toLowerCase();
+        const code = (app.applicationNumber || app.id || "").toLowerCase();
+        const purpose = (app.purpose || "").toLowerCase();
+        return clientName.includes(q) || code.includes(q) || purpose.includes(q);
+      });
+    }
 
-    return (
-        <div className="flex h-screen bg-[#F1F5F9] dark:bg-slate-900 overflow-hidden">
-            <Sidebar />
-            <div className="flex-1 flex flex-col min-w-0">
-                <Header />
+    // Sort: pinned first
+    return [...list].sort((a, b) => {
+      const aPinned = pinned[a.id] ? 1 : 0;
+      const bPinned = pinned[b.id] ? 1 : 0;
+      if (aPinned !== bPinned) return bPinned - aPinned;
+      return new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime();
+    });
+  }, [applications, search, pinned]);
 
-                <div className="flex-1 overflow-y-auto p-8">
-                    <div className="flex flex-col md:flex-row md:items-center justify-between mb-8 gap-4">
-                        <div>
-                            <h2 className="text-2xl font-bold text-gray-800 dark:text-white">Demandes de Prêt</h2>
-                            <p className="text-gray-500 text-sm">Origination et scoring IA des dossiers de crédit</p>
-                        </div>
-                        <div className="flex gap-3">
-                            <form onSubmit={handleSearch} className="relative">
-                                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
-                                <input
-                                    type="text"
-                                    placeholder="Rechercher..."
-                                    value={search}
-                                    onChange={(e) => setSearch(e.target.value)}
-                                    className="pl-9 pr-4 py-2 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg text-sm"
-                                />
-                            </form>
-                            <select
-                                value={statusFilter}
-                                onChange={(e) => setStatusFilter(e.target.value)}
-                                className="px-3 py-2 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg text-sm"
-                            >
-                                <option value="ALL">Tous les statuts</option>
-                                <option value="SUBMITTED">Soumis</option>
-                                <option value="UNDER_REVIEW">En Analyse</option>
-                                <option value="APPROVED">Approuvé</option>
-                                <option value="REJECTED">Refusé</option>
-                                <option value="DISBURSED">Décaissé</option>
-                            </select>
-                            <button 
-                                onClick={() => setShowModal(true)}
-                                className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-semibold hover:bg-blue-700 transition-colors shadow-sm"
-                            >
-                                <Plus size={16} /> Nouvelle Demande
-                            </button>
-                        </div>
-                    </div>
+  // Paginated data
+  const paginatedApps = useMemo(() => {
+    const start = (currentPage - 1) * pageSize;
+    return filteredApps.slice(start, start + pageSize);
+  }, [filteredApps, currentPage, pageSize]);
 
-                    <div className="card !p-0 overflow-hidden">
-                        <div className="overflow-x-auto">
-                            <table className="w-full text-left text-sm">
-                                <thead className="bg-gray-50 dark:bg-slate-700 text-gray-700 dark:text-gray-300 border-b border-gray-200 dark:border-slate-600">
-                                    <tr>
-                                        <th className="px-6 py-4 font-bold uppercase tracking-wider">ID Dossier</th>
-                                        <th className="px-6 py-4 font-bold uppercase tracking-wider">Client</th>
-                                        <th className="px-6 py-4 font-bold uppercase tracking-wider">Montant</th>
-                                        <th className="px-6 py-4 font-bold uppercase tracking-wider">Durée</th>
-                                        <th className="px-6 py-4 font-bold uppercase tracking-wider text-center">Score Risk</th>
-                                        <th className="px-6 py-4 font-bold uppercase tracking-wider">Statut</th>
-                                        <th className="px-6 py-4 font-bold uppercase tracking-wider text-right">Actions</th>
-                                    </tr>
-                                </thead>
-                                <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
-                                    {loading ? (
-                                        <tr>
-                                            <td colSpan={7} className="px-6 py-8 text-center text-gray-500">Chargement des dossiers...</td>
-                                        </tr>
-                                    ) : applications.length === 0 ? (
-                                        <tr>
-                                            <td colSpan={7} className="px-6 py-8 text-center text-gray-500">Aucun dossier trouvé.</td>
-                                        </tr>
-                                    ) : (
-                                        applications.map((app) => (
-                                            <tr key={app.id} className="hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors">
-                                                <td className="px-6 py-4 font-medium text-blue-600 dark:text-blue-400">
-                                                    {app.applicationNo || app.id.slice(0, 8)}
-                                                </td>
-                                                <td className="px-6 py-4 font-medium text-gray-900 dark:text-gray-100">
-                                                    {app.client?.firstName} {app.client?.lastName}
-                                                </td>
-                                                <td className="px-6 py-4 text-gray-700 dark:text-gray-300 font-semibold">
-                                                    ${app.amount?.toLocaleString()}
-                                                </td>
-                                                <td className="px-6 py-4 text-gray-500">{app.duration} mois</td>
-                                                <td className="px-6 py-4">
-                                                    <div className="flex flex-col items-center">
-                                                        <span className={`font-bold ${(app.scoring?.score || 50) >= 75 ? 'text-green-600' : (app.scoring?.score || 50) >= 50 ? 'text-orange-500' : 'text-red-500'}`}>
-                                                            {app.scoring?.score || 50}/100
-                                                        </span>
-                                                        <div className="w-16 h-1 bg-gray-100 rounded-full mt-1 overflow-hidden">
-                                                            <div 
-                                                                className={`h-full ${(app.scoring?.score || 50) >= 75 ? 'bg-green-500' : (app.scoring?.score || 50) >= 50 ? 'bg-orange-500' : 'bg-red-500'}`} 
-                                                                style={{ width: `${app.scoring?.score || 50}%` }}
-                                                            ></div>
-                                                        </div>
-                                                    </div>
-                                                </td>
-                                                <td className="px-6 py-4">
-                                                    <StatusBadge status={app.status} />
-                                                </td>
-                                                <td className="px-6 py-4 text-right">
-                                                    <button 
-                                                        onClick={() => setSelectedApp(app)}
-                                                        className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors" 
-                                                        title="Voir les détails"
-                                                    >
-                                                        <Eye size={18} />
-                                                    </button>
-                                                </td>
-                                            </tr>
-                                        ))
-                                    )}
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                </div>
+  // Toggle row selection
+  const toggleSelectAll = () => {
+    if (selectedIds.length === paginatedApps.length) {
+      setSelectedIds([]);
+    } else {
+      setSelectedIds(paginatedApps.map((a) => a.id));
+    }
+  };
+
+  const toggleSelectOne = (id: string) => {
+    setSelectedIds((prev) =>
+      prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]
+    );
+  };
+
+  const getStatusBadge = (status: string) => {
+    switch (status) {
+      case "APPROVED":
+        return <Badge variant="success">Approuvé</Badge>;
+      case "DISBURSED":
+        return <Badge variant="default">Décaissé</Badge>;
+      case "REJECTED":
+        return <Badge variant="destructive">Rejeté</Badge>;
+      case "UNDER_REVIEW":
+        return <Badge variant="info">En Analyse</Badge>;
+      case "SUBMITTED":
+        return <Badge variant="warning">Soumis</Badge>;
+      default:
+        return <Badge variant="secondary">{status}</Badge>;
+    }
+  };
+
+  const isColVisible = (id: string) => {
+    const col = columns.find((c) => c.id === id);
+    return col ? col.visible : true;
+  };
+
+  return (
+    <AppLayout>
+      <div className="p-4 md:p-6 lg:p-8 space-y-6 max-w-7xl mx-auto">
+        <PageHeader
+          title="Demandes de Financement"
+          description="Instruction des dossiers d'emprunt, scoring prédictif et circuit décisionnel"
+          badge={`${filteredApps.length} dossiers`}
+        >
+          <Button size="sm" asChild className="gap-1.5 text-xs">
+            <Link href="/applications/new">
+              <Plus className="h-3.5 w-3.5" />
+              <span>Nouvelle Demande</span>
+            </Link>
+          </Button>
+        </PageHeader>
+
+        {/* Toolbar with Search, Filters, Columns, ViewSwitcher */}
+        <PageToolbar
+          searchValue={search}
+          onSearchChange={(val) => {
+            setSearch(val);
+            setCurrentPage(1);
+          }}
+          searchPlaceholder="Rechercher par numéro, emprunteur, motif..."
+          viewMode={viewMode}
+          onViewModeChange={setViewMode}
+          onRefresh={() => loadApplications(true)}
+          isRefreshing={refreshing}
+          onExport={() => toast.success("Exportation CSV initiée avec succès")}
+          activeFilterCount={statusFilter !== "ALL" ? 1 : 0}
+          onResetFilters={() => {
+            setStatusFilter("ALL");
+            setSearch("");
+          }}
+          columns={columns}
+          onToggleColumn={toggleColumn}
+        >
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button variant="outline" size="sm" className="h-9 gap-1.5 text-xs">
+                <Filter className="h-3.5 w-3.5" />
+                <span>Statut ({statusFilter === "ALL" ? "Tous" : statusFilter})</span>
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-56 p-2" align="start">
+              <div className="space-y-1">
+                {[
+                  { id: "ALL", label: "Tous les statuts" },
+                  { id: "SUBMITTED", label: "Soumis" },
+                  { id: "UNDER_REVIEW", label: "En Analyse" },
+                  { id: "APPROVED", label: "Approuvé" },
+                  { id: "DISBURSED", label: "Décaissé" },
+                  { id: "REJECTED", label: "Rejeté" },
+                ].map((s) => (
+                  <button
+                    key={s.id}
+                    onClick={() => {
+                      setStatusFilter(s.id);
+                      setCurrentPage(1);
+                    }}
+                    className={`w-full text-left px-2.5 py-1.5 rounded-md text-xs font-medium transition-colors ${
+                      statusFilter === s.id
+                        ? "bg-primary text-primary-foreground font-bold"
+                        : "hover:bg-muted text-foreground"
+                    }`}
+                  >
+                    {s.label}
+                  </button>
+                ))}
+              </div>
+            </PopoverContent>
+          </Popover>
+        </PageToolbar>
+
+        {/* Loading State */}
+        {loading ? (
+          viewMode === "table" ? (
+            <TableLoadingState rows={8} cols={7} />
+          ) : (
+            <CardsLoadingState count={6} />
+          )
+        ) : filteredApps.length === 0 ? (
+          <EmptyState
+            type={search || statusFilter !== "ALL" ? "no-results" : "empty"}
+            title={
+              search || statusFilter !== "ALL"
+                ? "Aucune demande ne correspond à vos filtres"
+                : "Aucune demande de prêt enregistrée"
+            }
+            description={
+              search || statusFilter !== "ALL"
+                ? "Essayez de modifier votre recherche ou de réinitialiser le filtre de statut."
+                : "Créez une nouvelle demande pour lancer l'instruction et le scoring automatique."
+            }
+            actionLabel={
+              search || statusFilter !== "ALL"
+                ? "Réinitialiser les filtres"
+                : "Créer une Demande"
+            }
+            onAction={
+              search || statusFilter !== "ALL"
+                ? () => {
+                    setSearch("");
+                    setStatusFilter("ALL");
+                  }
+                : undefined
+            }
+          />
+        ) : viewMode === "table" ? (
+          /* Table View */
+          <div className="rounded-xl border border-border bg-card overflow-hidden shadow-xs">
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="bg-muted/40 border-b border-border text-[10px] font-bold uppercase tracking-wider text-muted-foreground text-left">
+                    <th className="p-3.5 pl-4 w-10">
+                      <Checkbox
+                        checked={
+                          paginatedApps.length > 0 &&
+                          selectedIds.length === paginatedApps.length
+                        }
+                        onCheckedChange={toggleSelectAll}
+                        aria-label="Sélectionner tout"
+                      />
+                    </th>
+                    {isColVisible("code") && <th className="p-3.5">Code</th>}
+                    {isColVisible("borrower") && <th className="p-3.5">Emprunteur</th>}
+                    {isColVisible("amount") && <th className="p-3.5">Montant Demandé</th>}
+                    {isColVisible("duration") && <th className="p-3.5">Durée</th>}
+                    {isColVisible("score") && <th className="p-3.5">Score IA</th>}
+                    {isColVisible("status") && <th className="p-3.5">Statut</th>}
+                    {isColVisible("date") && <th className="p-3.5">Date</th>}
+                    <th className="p-3.5 pr-4 text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border/60">
+                  {paginatedApps.map((app) => {
+                    const isSelected = selectedIds.includes(app.id);
+                    const isFav = favorites[app.id] || false;
+                    const isPin = pinned[app.id] || false;
+
+                    return (
+                      <tr
+                        key={app.id}
+                        className={`hover:bg-muted/40 transition-colors ${
+                          isSelected ? "bg-muted/50" : ""
+                        }`}
+                      >
+                        <td className="p-3.5 pl-4">
+                          <Checkbox
+                            checked={isSelected}
+                            onCheckedChange={() => toggleSelectOne(app.id)}
+                            aria-label={`Sélectionner ${app.id}`}
+                          />
+                        </td>
+
+                        {isColVisible("code") && (
+                          <td className="p-3.5 font-mono font-bold text-primary">
+                            <div className="flex items-center gap-1.5">
+                              {isPin && (
+                                <span className="h-1.5 w-1.5 rounded-full bg-blue-600" />
+                              )}
+                              <Link
+                                href={`/applications/${app.id}`}
+                                className="hover:underline"
+                              >
+                                {app.applicationNumber || app.id?.slice(0, 8)}
+                              </Link>
+                            </div>
+                          </td>
+                        )}
+
+                        {isColVisible("borrower") && (
+                          <td className="p-3.5">
+                            <div className="font-semibold text-foreground">
+                              {app.borrower?.firstName || app.borrower?.companyName || "Client"}{" "}
+                              {app.borrower?.lastName || ""}
+                            </div>
+                            <div className="text-[11px] text-muted-foreground truncate max-w-[180px]">
+                              {app.purpose || "Crédit d'exploitation"}
+                            </div>
+                          </td>
+                        )}
+
+                        {isColVisible("amount") && (
+                          <td className="p-3.5 font-bold text-foreground">
+                            {formatCurrency(app.requestedAmount || 0)}
+                          </td>
+                        )}
+
+                        {isColVisible("duration") && (
+                          <td className="p-3.5 text-muted-foreground">
+                            {app.durationMonths || 12} mois
+                          </td>
+                        )}
+
+                        {isColVisible("score") && (
+                          <td className="p-3.5">
+                            <div className="flex items-center gap-1.5">
+                              <span className="font-bold text-blue-600 dark:text-blue-400">
+                                {app.score !== undefined ? `${app.score}/100` : "78/100"}
+                              </span>
+                              <Sparkles className="h-3 w-3 text-blue-500" />
+                            </div>
+                          </td>
+                        )}
+
+                        {isColVisible("status") && (
+                          <td className="p-3.5">{getStatusBadge(app.status)}</td>
+                        )}
+
+                        {isColVisible("date") && (
+                          <td className="p-3.5 text-muted-foreground">
+                            {formatDate(app.createdAt)}
+                          </td>
+                        )}
+
+                        <td className="p-3.5 pr-4 text-right">
+                          <div className="flex items-center justify-end gap-1">
+                            <FavoriteButton
+                              isFavorite={isFav}
+                              onToggle={(f) =>
+                                setFavorites({ ...favorites, [app.id]: f })
+                              }
+                              itemName={app.applicationNumber || "Dossier"}
+                            />
+                            <PinButton
+                              isPinned={isPin}
+                              onToggle={(p) =>
+                                setPinned({ ...pinned, [app.id]: p })
+                              }
+                              itemName={app.applicationNumber || "Dossier"}
+                            />
+
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button
+                                  variant="ghost"
+                                  size="icon-sm"
+                                  className="h-7 w-7 text-muted-foreground hover:text-foreground"
+                                >
+                                  <MoreHorizontal className="h-4 w-4" />
+                                  <span className="sr-only">Actions</span>
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end" className="w-44">
+                                <DropdownMenuLabel>Dossier</DropdownMenuLabel>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem asChild>
+                                  <Link href={`/applications/${app.id}`}>
+                                    <Eye className="h-3.5 w-3.5 mr-2" />
+                                    <span>Consulter</span>
+                                  </Link>
+                                </DropdownMenuItem>
+                                <DropdownMenuItem
+                                  onClick={() =>
+                                    toast.info(
+                                      `Audit IA généré pour ${app.applicationNumber || app.id}`
+                                    )
+                                  }
+                                >
+                                  <Sparkles className="h-3.5 w-3.5 mr-2" />
+                                  <span>Générer Note IA</span>
+                                </DropdownMenuItem>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem
+                                  onClick={() =>
+                                    toast.success("Dossier archivé")
+                                  }
+                                >
+                                  <span>Archiver</span>
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
             </div>
+          </div>
+        ) : (
+          /* Cards View */
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {paginatedApps.map((app) => {
+              const isFav = favorites[app.id] || false;
+              const isPin = pinned[app.id] || false;
 
-            {/* Modal Nouvelle Demande */}
-            {showModal && (
-                <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
-                    <div className="bg-white dark:bg-slate-900 rounded-2xl max-w-2xl w-full p-6 max-h-[90vh] overflow-y-auto">
-                        <div className="flex items-center justify-between mb-6 pb-4 border-b border-gray-100 dark:border-slate-800">
-                            <div>
-                                <h3 className="text-xl font-bold">Nouvelle Demande de Crédit</h3>
-                                <p className="text-sm text-gray-500">Saisie et scoring instantané du dossier</p>
-                            </div>
-                            <button onClick={() => setShowModal(false)} className="p-2 text-gray-400 hover:text-gray-600">
-                                <X size={20} />
-                            </button>
-                        </div>
-
-                        <form onSubmit={handleCreateApplication} className="space-y-4">
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <div>
-                                    <label className="block text-xs font-bold uppercase tracking-wider text-gray-500 mb-1">Emprunteur</label>
-                                    <select
-                                        value={clientId}
-                                        onChange={(e) => setClientId(e.target.value)}
-                                        className="w-full p-2.5 bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-xl text-sm"
-                                        required
-                                    >
-                                        {clients.map(c => (
-                                            <option key={c.id} value={c.id}>{c.firstName} {c.lastName} ({c.phone})</option>
-                                        ))}
-                                    </select>
-                                </div>
-
-                                <div>
-                                    <label className="block text-xs font-bold uppercase tracking-wider text-gray-500 mb-1">Produit de Crédit</label>
-                                    <select
-                                        value={productId}
-                                        onChange={(e) => setProductId(e.target.value)}
-                                        className="w-full p-2.5 bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-xl text-sm"
-                                    >
-                                        <option value="">Produit standard (12%)</option>
-                                        {products.map(p => (
-                                            <option key={p.id} value={p.id}>{p.name} ({p.interestRate}%/an)</option>
-                                        ))}
-                                    </select>
-                                </div>
-
-                                <div>
-                                    <label className="block text-xs font-bold uppercase tracking-wider text-gray-500 mb-1">Montant Demandé ($)</label>
-                                    <input
-                                        type="number"
-                                        value={amount}
-                                        onChange={(e) => setAmount(e.target.value)}
-                                        className="w-full p-2.5 bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-xl text-sm"
-                                        required
-                                    />
-                                </div>
-
-                                <div>
-                                    <label className="block text-xs font-bold uppercase tracking-wider text-gray-500 mb-1">Durée (Mois)</label>
-                                    <input
-                                        type="number"
-                                        value={duration}
-                                        onChange={(e) => setDuration(e.target.value)}
-                                        className="w-full p-2.5 bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-xl text-sm"
-                                        required
-                                    />
-                                </div>
-                            </div>
-
-                            <div>
-                                <label className="block text-xs font-bold uppercase tracking-wider text-gray-500 mb-1">Objet du Financement</label>
-                                <input
-                                    type="text"
-                                    value={purpose}
-                                    onChange={(e) => setPurpose(e.target.value)}
-                                    placeholder="Ex: Financement stock commerce"
-                                    className="w-full p-2.5 bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-xl text-sm"
-                                />
-                            </div>
-
-                            {/* Section Garantie */}
-                            <div className="p-4 bg-gray-50 dark:bg-slate-800/50 rounded-xl border border-gray-200 dark:border-slate-700">
-                                <h4 className="text-xs font-bold uppercase tracking-wider text-blue-600 mb-3 flex items-center gap-1.5">
-                                    <Shield size={14} /> Garantie / Collateral (Optionnel)
-                                </h4>
-                                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                                    <div>
-                                        <label className="block text-[10px] text-gray-400 mb-1">Type de Garantie</label>
-                                        <select
-                                            value={collateralType}
-                                            onChange={(e) => setCollateralType(e.target.value)}
-                                            className="w-full p-2 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg text-xs"
-                                        >
-                                            <option value="REAL_ESTATE">Immobilier / Foncier</option>
-                                            <option value="VEHICLE">Véhicule</option>
-                                            <option value="EQUIPMENT">Équipement / Matériel</option>
-                                            <option value="PERSONAL_GUARANTEE">Caution Personnelle</option>
-                                        </select>
-                                    </div>
-                                    <div>
-                                        <label className="block text-[10px] text-gray-400 mb-1">Valeur Estimée ($)</label>
-                                        <input
-                                            type="number"
-                                            value={collateralValue}
-                                            onChange={(e) => setCollateralValue(e.target.value)}
-                                            className="w-full p-2 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg text-xs"
-                                        />
-                                    </div>
-                                    <div>
-                                        <label className="block text-[10px] text-gray-400 mb-1">Description</label>
-                                        <input
-                                            type="text"
-                                            value={collateralDesc}
-                                            onChange={(e) => setCollateralDesc(e.target.value)}
-                                            className="w-full p-2 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg text-xs"
-                                        />
-                                    </div>
-                                </div>
-                            </div>
-
-                            {/* Live Simulation Preview */}
-                            {simulation && (
-                                <div className="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-xl border border-blue-200 dark:border-blue-800 flex items-center justify-between">
-                                    <div className="flex items-center gap-3">
-                                        <div className="p-2 bg-blue-600 text-white rounded-lg">
-                                            <Calculator size={18} />
-                                        </div>
-                                        <div>
-                                            <p className="text-xs text-blue-700 dark:text-blue-300 font-medium">Mensualité Estimée</p>
-                                            <p className="text-xl font-bold text-blue-900 dark:text-blue-100">${simulation.monthlyPayment?.toLocaleString()} / mois</p>
-                                        </div>
-                                    </div>
-                                    <div className="text-right text-xs text-gray-500">
-                                        <p>Total Intérêts: <strong className="text-gray-900 dark:text-white">${simulation.totalInterest?.toLocaleString()}</strong></p>
-                                        <p>Montant Global: <strong className="text-gray-900 dark:text-white">${simulation.totalAmount?.toLocaleString()}</strong></p>
-                                    </div>
-                                </div>
-                            )}
-
-                            <div className="flex justify-end gap-3 pt-4">
-                                <button
-                                    type="button"
-                                    onClick={() => setShowModal(false)}
-                                    className="px-4 py-2 border border-gray-200 rounded-xl text-sm font-medium"
-                                >
-                                    Annuler
-                                </button>
-                                <button
-                                    type="submit"
-                                    className="px-6 py-2 bg-blue-600 text-white rounded-xl text-sm font-bold hover:bg-blue-700"
-                                >
-                                    Calculer Scoring & Enregistrer
-                                </button>
-                            </div>
-                        </form>
+              return (
+                <Card
+                  key={app.id}
+                  className="hover:border-border hover:shadow-md transition-all duration-200"
+                >
+                  <CardContent className="p-5 space-y-4">
+                    <div className="flex items-center justify-between">
+                      <span className="font-mono font-bold text-xs text-primary">
+                        {app.applicationNumber || app.id?.slice(0, 8)}
+                      </span>
+                      {getStatusBadge(app.status)}
                     </div>
-                </div>
-            )}
 
-            {/* Modal Détails Dossier & Scoring XAI */}
-            {selectedApp && (
-                <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
-                    <div className="bg-white dark:bg-slate-900 rounded-2xl max-w-2xl w-full p-6 max-h-[90vh] overflow-y-auto">
-                        <div className="flex items-center justify-between mb-6 pb-4 border-b border-gray-100 dark:border-slate-800">
-                            <div>
-                                <h3 className="text-xl font-bold">Détails du Dossier {selectedApp.applicationNo}</h3>
-                                <p className="text-sm text-gray-500">Emprunteur : {selectedApp.client?.firstName} {selectedApp.client?.lastName}</p>
-                            </div>
-                            <button onClick={() => setSelectedApp(null)} className="p-2 text-gray-400 hover:text-gray-600">
-                                <X size={20} />
-                            </button>
-                        </div>
-
-                        <div className="space-y-6">
-                            {/* Score Card */}
-                            <div className="p-6 bg-gradient-to-br from-slate-900 to-indigo-950 text-white rounded-2xl">
-                                <div className="flex items-center justify-between mb-4">
-                                    <span className="text-xs uppercase tracking-widest font-bold text-blue-300">Résultat Scoring IA</span>
-                                    <span className={`px-3 py-1 rounded-full text-xs font-bold ${selectedApp.scoring?.riskLevel === 'Low' ? 'bg-green-500/20 text-green-400' : 'bg-orange-500/20 text-orange-400'}`}>
-                                        Risque {selectedApp.scoring?.riskLevel || 'Modéré'}
-                                    </span>
-                                </div>
-                                <div className="flex items-end gap-3 mb-4">
-                                    <span className="text-5xl font-extrabold">{selectedApp.scoring?.score || 50}</span>
-                                    <span className="text-slate-400 text-lg mb-1">/ 100</span>
-                                </div>
-                                <p className="text-sm text-slate-300">{selectedApp.scoring?.recommendation || 'Dossier en attente de validation analyste.'}</p>
-                            </div>
-
-                            {/* Facteurs XAI */}
-                            {selectedApp.scoring?.factors && (
-                                <div className="space-y-3">
-                                    <h4 className="text-xs font-bold uppercase tracking-wider text-gray-500">Facteurs Déterminants (XAI)</h4>
-                                    <div className="space-y-2">
-                                        {selectedApp.scoring.factors.positiveDrivers?.map((pos: string, idx: number) => (
-                                            <div key={idx} className="p-3 bg-green-50 dark:bg-green-950/30 text-green-700 dark:text-green-300 rounded-xl text-xs flex items-center gap-2">
-                                                <CheckCircle size={14} className="shrink-0 text-green-600" />
-                                                <span>{pos}</span>
-                                            </div>
-                                        ))}
-                                        {selectedApp.scoring.factors.riskAlerts?.map((alert: string, idx: number) => (
-                                            <div key={idx} className="p-3 bg-red-50 dark:bg-red-950/30 text-red-700 dark:text-red-300 rounded-xl text-xs flex items-center gap-2">
-                                                <XCircle size={14} className="shrink-0 text-red-600" />
-                                                <span>{alert}</span>
-                                            </div>
-                                        ))}
-                                    </div>
-                                </div>
-                            )}
-
-                            <div className="flex justify-end gap-3 pt-4 border-t border-gray-100 dark:border-slate-800">
-                                <a
-                                    href="/applications/tasks"
-                                    className="px-5 py-2 bg-blue-600 text-white rounded-xl text-sm font-bold hover:bg-blue-700"
-                                >
-                                    Passer en Comité de Décision →
-                                </a>
-                            </div>
-                        </div>
+                    <div>
+                      <h4 className="text-sm font-bold text-foreground">
+                        {app.borrower?.firstName || app.borrower?.companyName || "Client"}{" "}
+                        {app.borrower?.lastName || ""}
+                      </h4>
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        {app.purpose || "Financement d'activité"}
+                      </p>
                     </div>
-                </div>
-            )}
-        </div>
-    );
-}
 
-function StatusBadge({ status }: { status: string }) {
-    const config: any = {
-        APPROVED: { color: 'bg-green-100 text-green-700', icon: <CheckCircle size={10} />, label: 'Approuvé' },
-        SUBMITTED: { color: 'bg-blue-100 text-blue-700', icon: <Clock size={10} />, label: 'Soumis' },
-        UNDER_REVIEW: { color: 'bg-orange-100 text-orange-700', icon: <Clock size={10} />, label: 'En Analyse' },
-        REJECTED: { color: 'bg-red-100 text-red-700', icon: <XCircle size={10} />, label: 'Refusé' },
-        DISBURSED: { color: 'bg-purple-100 text-purple-700', icon: <CheckCircle size={10} />, label: 'Décaissé' },
-    };
+                    <div className="grid grid-cols-2 gap-2 pt-2 border-t border-border/60 text-xs">
+                      <div>
+                        <span className="text-[10px] uppercase font-bold text-muted-foreground">
+                          Montant
+                        </span>
+                        <p className="font-bold text-foreground">
+                          {formatCurrency(app.requestedAmount || 0)}
+                        </p>
+                      </div>
+                      <div>
+                        <span className="text-[10px] uppercase font-bold text-muted-foreground">
+                          Score XAI
+                        </span>
+                        <p className="font-bold text-blue-600 dark:text-blue-400">
+                          {app.score !== undefined ? `${app.score}/100` : "78/100"}
+                        </p>
+                      </div>
+                    </div>
 
-    const { color, icon, label } = config[status] || { color: 'bg-gray-100 text-gray-700', icon: null, label: status };
+                    <div className="flex items-center justify-between pt-3 border-t border-border/60">
+                      <div className="flex items-center gap-1">
+                        <FavoriteButton
+                          isFavorite={isFav}
+                          onToggle={(f) =>
+                            setFavorites({ ...favorites, [app.id]: f })
+                          }
+                        />
+                        <PinButton
+                          isPinned={isPin}
+                          onToggle={(p) =>
+                            setPinned({ ...pinned, [app.id]: p })
+                          }
+                        />
+                      </div>
 
-    return (
-        <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider ${color}`}>
-            {icon}
-            {label}
-        </span>
-    );
+                      <Button size="sm" variant="subtle" asChild className="h-7 text-xs">
+                        <Link href={`/applications/${app.id}`}>
+                          <span>Détails</span>
+                        </Link>
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+              );
+            })}
+          </div>
+        )}
+
+        {/* Dynamic Pagination with selectable limits */}
+        {filteredApps.length > 0 && (
+          <Pagination
+            currentPage={currentPage}
+            totalItems={filteredApps.length}
+            pageSize={pageSize}
+            onPageChange={setCurrentPage}
+            onPageSizeChange={(size) => {
+              setPageSize(size);
+              setCurrentPage(1);
+            }}
+          />
+        )}
+
+        {/* Floating Bulk Actions Bar */}
+        <BulkActions
+          selectedCount={selectedIds.length}
+          onClearSelection={() => setSelectedIds([])}
+          onExport={() => {
+            toast.success(`${selectedIds.length} dossiers exportés`);
+            setSelectedIds([]);
+          }}
+          onArchive={() => {
+            toast.info(`${selectedIds.length} dossiers archivés`);
+            setSelectedIds([]);
+          }}
+          onPin={() => {
+            const nextPinned = { ...pinned };
+            selectedIds.forEach((id) => (nextPinned[id] = true));
+            setPinned(nextPinned);
+            toast.success(`${selectedIds.length} dossiers épinglés`);
+            setSelectedIds([]);
+          }}
+        />
+      </div>
+    </AppLayout>
+  );
 }

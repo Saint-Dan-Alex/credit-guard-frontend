@@ -140,10 +140,15 @@ export const api = {
         if (status) q.append('status', status);
         return fetchApi<any[]>(`/workflow/tasks${q.toString() ? `?${q.toString()}` : ''}`);
     },
-    submitDecision: (applicationId: string, data: { action?: string; status?: string; comment: string; stage?: string }) =>
+    submitDecision: (applicationId: string, data: { action?: string; status?: string; comment?: string; comments?: string; stage?: string; decision?: string }) =>
         fetchApi<any>(`/workflow/decision/${applicationId}`, {
             method: 'POST',
             body: JSON.stringify(data),
+        }),
+    decideApplication: (applicationId: string, data: { decision: string; comments?: string }) =>
+        fetchApi<any>(`/workflow/decision/${applicationId}`, {
+            method: 'POST',
+            body: JSON.stringify({ action: data.decision, comment: data.comments }),
         }),
     getAuditLogs: (entityId?: string) => fetchApi<any[]>(`/workflow/logs${entityId ? `?entityId=${entityId}` : ''}`),
 
@@ -160,12 +165,12 @@ export const api = {
             method: 'POST',
             body: JSON.stringify(data),
         }),
-    activateLoan: (data: { applicationId: string; customInterestRate?: number; startDate?: string }) =>
+    activateLoan: (data: { applicationId: string; customInterestRate?: number; startDate?: string; firstPaymentDate?: string }) =>
         fetchApi<any>('/loans/activate', {
             method: 'POST',
             body: JSON.stringify(data),
         }),
-    createRepayment: (data: { loanId: string; amount: number; method?: string; transactionRef?: string; notes?: string }) =>
+    createRepayment: (data: { loanId: string; amount: number; method?: string; transactionRef?: string; transactionReference?: string; notes?: string }) =>
         fetchApi<any>('/loans/repay', {
             method: 'POST',
             body: JSON.stringify(data),
@@ -193,7 +198,8 @@ export const api = {
         criticalCount: number;
     }>('/recovery/stats'),
     recordCollectionAction: (caseId: string, data: {
-        actionType: string;
+        actionType?: string;
+        type?: string;
         notes: string;
         outcome?: string;
         nextActionDate?: string;
@@ -201,7 +207,14 @@ export const api = {
         promiseDate?: string;
     }) => fetchApi<any>(`/recovery/cases/${caseId}/actions`, {
         method: 'POST',
-        body: JSON.stringify(data),
+        body: JSON.stringify({
+            actionType: data.actionType || data.type || 'CALL',
+            notes: data.notes,
+            outcome: data.outcome,
+            nextActionDate: data.nextActionDate,
+            promiseAmount: data.promiseAmount,
+            promiseDate: data.promiseDate,
+        }),
     }),
     initiateLitigation: (caseId: string, data: { courtJurisdiction?: string; lawyerAssigned?: string; notes?: string }) =>
         fetchApi<any>(`/recovery/cases/${caseId}/litigate`, {

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import Sidebar from '@/components/Sidebar';
 import Header from '@/components/Header';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -13,44 +13,74 @@ import {
   XCircle, 
   MessageSquare,
   AlertCircle,
-  Zap
+  Zap,
+  CheckCircle,
+  Clock,
+  Shield,
+  DollarSign
 } from 'lucide-react';
+import { api } from '@/lib/api';
 
 export default function TasksPage() {
+    const [tasks, setTasks] = useState<any[]>([]);
+    const [loading, setLoading] = useState(true);
     const [selectedApp, setSelectedApp] = useState<any>(null);
+    const [comment, setComment] = useState('');
+    const [processing, setProcessing] = useState(false);
 
-    const tasks = [
-        { 
-            id: 'APP-001', 
-            client: 'Marie Nzambe', 
-            amount: '5,000 $', 
-            score: 82, 
-            status: 'SUBMITTED', 
-            date: 'Il y a 10m',
-            avatar: 'MN',
-            factors: ['Ratio DTI Excellent', 'Emploi Stable']
-        },
-        { 
-            id: 'APP-002', 
-            client: 'Jean-Paul Bodo', 
-            amount: '12,500 $', 
-            score: 64, 
-            status: 'SUBMITTED', 
-            date: 'Il y a 45m',
-            avatar: 'JB',
-            factors: ['Revenus suffisants', 'Encours existant modéré']
-        },
-        { 
-            id: 'APP-003', 
-            client: 'Socio Agri Coop', 
-            amount: '45,000 $', 
-            score: 88, 
-            status: 'SUBMITTED', 
-            date: 'Il y a 1h',
-            avatar: 'SA',
-            factors: ['Garanties solides', 'Historique parfait']
+    const loadTasks = async () => {
+        try {
+            setLoading(true);
+            const data = await api.getPendingTasks();
+            setTasks(data);
+            if (data.length > 0 && !selectedApp) {
+                setSelectedApp(data[0]);
+            }
+        } catch (err) {
+            console.error('Failed to load pending tasks:', err);
+        } finally {
+            setLoading(false);
         }
-    ];
+    };
+
+    useEffect(() => {
+        loadTasks();
+    }, []);
+
+    const handleDecision = async (action: 'APPROVE' | 'REJECT' | 'SEND_TO_COMMITTEE') => {
+        if (!selectedApp) return;
+        try {
+            setProcessing(true);
+            await api.submitDecision(selectedApp.id, {
+                action,
+                comment: comment || `Décision ${action} appliquée depuis le comité`,
+            });
+            setComment('');
+            await loadTasks();
+            setSelectedApp(null);
+        } catch (err: any) {
+            alert(err.message || 'Erreur lors de la soumission de décision');
+        } finally {
+            setProcessing(false);
+        }
+    };
+
+    const handleDisburse = async () => {
+        if (!selectedApp) return;
+        try {
+            setProcessing(true);
+            await api.activateLoan({
+                applicationId: selectedApp.id,
+            });
+            alert('Prêt décaissé avec succès ! Échéancier généré.');
+            await loadTasks();
+            setSelectedApp(null);
+        } catch (err: any) {
+            alert(err.message || 'Erreur lors du décaissement');
+        } finally {
+            setProcessing(false);
+        }
+    };
 
     return (
         <div className="flex h-screen bg-[#F8FAFC] dark:bg-slate-950 overflow-hidden font-sans">
@@ -66,171 +96,191 @@ export default function TasksPage() {
                                 Tâches & Validation
                             </h2>
                             <p className="text-slate-500 dark:text-slate-400 mt-1 font-medium">
-                                Examinez les dossiers en attente de décision
+                                Circuit Maker-Checker et arbitrage des dossiers de crédit
                             </p>
                         </div>
                         <div className="flex items-center gap-3">
-                            <div className="flex -space-x-2 mr-4">
-                                {[1, 2, 3].map(i => (
-                                    <div key={i} className="w-8 h-8 rounded-full border-2 border-white dark:border-slate-900 bg-slate-200 dark:bg-slate-700"></div>
-                                ))}
-                                <div className="w-8 h-8 rounded-full border-2 border-white dark:border-slate-900 bg-blue-600 flex items-center justify-center text-[10px] font-bold text-white">
-                                    +5
-                                </div>
-                            </div>
-                            <button className="flex items-center gap-2 px-5 py-2.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-sm font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-50 transition-all shadow-sm">
-                                <Filter size={18} /> Filtrer
-                            </button>
+                            <span className="px-4 py-2 bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-200 rounded-xl text-xs font-bold">
+                                {tasks.length} dossier(s) en attente
+                            </span>
                         </div>
                     </div>
 
-                    {/* Tasks List */}
-                    <div className="grid grid-cols-1 gap-4">
-                        {tasks.map((task, index) => (
-                            <motion.div 
-                                key={task.id}
-                                initial={{ opacity: 0, y: 20 }}
-                                animate={{ opacity: 1, y: 0 }}
-                                transition={{ delay: index * 0.1 }}
-                                onClick={() => setSelectedApp(task)}
-                                className="card p-6 flex flex-col md:flex-row md:items-center justify-between gap-6 cursor-pointer hover:border-blue-200 dark:hover:border-blue-900 transition-all group"
-                            >
-                                <div className="flex items-center gap-4 flex-1">
-                                    <div className="w-12 h-12 rounded-2xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center font-bold text-slate-500 text-lg shadow-sm border border-slate-200 dark:border-slate-700">
-                                        {task.avatar}
-                                    </div>
-                                    <div>
-                                        <div className="flex items-center gap-2">
-                                            <h4 className="font-bold text-slate-900 dark:text-white">{task.client}</h4>
-                                            <span className="px-2 py-0.5 bg-blue-50 text-blue-600 text-[10px] font-black rounded-md">{task.id}</span>
-                                        </div>
-                                        <p className="text-xs text-slate-400 mt-1 font-medium">{task.date} • Prêt Personnel</p>
-                                    </div>
+                    <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+                        {/* Tasks List (Left Column) */}
+                        <div className="lg:col-span-5 space-y-4">
+                            {loading ? (
+                                <div className="p-8 text-center text-slate-400">Chargement de la file de tâches...</div>
+                            ) : tasks.length === 0 ? (
+                                <div className="card p-8 text-center text-slate-500">
+                                    <CheckCircle2 size={40} className="mx-auto mb-3 text-green-500" />
+                                    <p className="font-bold">File d'attente vide !</p>
+                                    <p className="text-xs text-slate-400 mt-1">Tous les dossiers soumis ont été traités.</p>
                                 </div>
-
-                                <div className="flex items-center gap-12">
-                                    <div>
-                                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Montant</p>
-                                        <p className="text-lg font-black text-slate-800 dark:text-slate-100 tabular-nums">{task.amount}</p>
-                                    </div>
-                                    <div>
-                                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Scoring IA</p>
-                                        <div className="flex items-center gap-2">
-                                            <span className={`text-lg font-black ${task.score > 70 ? 'text-green-600' : 'text-amber-500'}`}>
-                                                {task.score}/100
+                            ) : (
+                                tasks.map((task) => (
+                                    <div
+                                        key={task.id}
+                                        onClick={() => setSelectedApp(task)}
+                                        className={`card p-5 cursor-pointer transition-all border-2 ${selectedApp?.id === task.id ? 'border-blue-600 shadow-md bg-blue-50/20' : 'hover:border-slate-300 dark:hover:border-slate-700'}`}
+                                    >
+                                        <div className="flex items-start justify-between">
+                                            <div>
+                                                <h4 className="font-bold text-slate-900 dark:text-white">
+                                                    {task.client?.firstName} {task.client?.lastName}
+                                                </h4>
+                                                <p className="text-xs text-slate-400">{task.applicationNo || task.id.slice(0, 8)} • {task.product?.name || 'Prêt Standard'}</p>
+                                            </div>
+                                            <span className="text-lg font-black text-blue-600 dark:text-blue-400">
+                                                ${task.amount?.toLocaleString()}
                                             </span>
-                                            <div className="w-12 h-1.5 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
-                                                <div 
-                                                    className={`h-full ${task.score > 70 ? 'bg-green-500' : 'bg-amber-500'}`} 
-                                                    style={{ width: `${task.score}%` }}
-                                                ></div>
+                                        </div>
+
+                                        <div className="flex items-center justify-between mt-4 pt-4 border-t border-slate-100 dark:border-slate-800">
+                                            <div className="flex items-center gap-2">
+                                                <span className={`text-xs font-bold ${(task.scoring?.score || 50) >= 75 ? 'text-green-600' : 'text-orange-500'}`}>
+                                                    Score IA : {task.scoring?.score || 50}/100
+                                                </span>
+                                            </div>
+                                            <span className="text-[10px] uppercase tracking-wider font-bold px-2 py-0.5 bg-slate-100 dark:bg-slate-800 rounded">
+                                                {task.workflowStage}
+                                            </span>
+                                        </div>
+                                    </div>
+                                ))
+                            )}
+                        </div>
+
+                        {/* Selected Task Details (Right Column) */}
+                        <div className="lg:col-span-7">
+                            {selectedApp ? (
+                                <div className="card p-6 space-y-6">
+                                    <div className="flex items-center justify-between pb-4 border-b border-slate-100 dark:border-slate-800">
+                                        <div>
+                                            <h3 className="text-xl font-black">{selectedApp.client?.firstName} {selectedApp.client?.lastName}</h3>
+                                            <p className="text-xs text-slate-400">Dossier N° {selectedApp.applicationNo}</p>
+                                        </div>
+                                        <div className="text-right">
+                                            <p className="text-xs text-slate-400">Montant Demandé</p>
+                                            <p className="text-2xl font-black text-slate-900 dark:text-white">${selectedApp.amount?.toLocaleString()}</p>
+                                        </div>
+                                    </div>
+
+                                    {/* Scoring IA Box */}
+                                    <div className="p-5 bg-gradient-to-br from-slate-900 to-indigo-950 text-white rounded-2xl">
+                                        <div className="flex items-center justify-between mb-3">
+                                            <span className="text-xs font-bold text-blue-300 uppercase tracking-wider flex items-center gap-1.5">
+                                                <Zap size={14} /> Synthèse Risque & IA
+                                            </span>
+                                            <span className={`px-2.5 py-0.5 rounded-full text-xs font-bold ${selectedApp.scoring?.riskLevel === 'Low' ? 'bg-green-500/20 text-green-400' : 'bg-orange-500/20 text-orange-400'}`}>
+                                                Risque {selectedApp.scoring?.riskLevel || 'Modéré'}
+                                            </span>
+                                        </div>
+                                        <div className="flex items-baseline gap-3 mb-2">
+                                            <span className="text-4xl font-extrabold">{selectedApp.scoring?.score || 50}</span>
+                                            <span className="text-slate-400 text-sm">/ 100</span>
+                                        </div>
+                                        <p className="text-xs text-slate-300 leading-relaxed">{selectedApp.scoring?.recommendation}</p>
+                                    </div>
+
+                                    {/* XAI Factors Breakdown */}
+                                    {selectedApp.scoring?.factors && (
+                                        <div className="space-y-3">
+                                            <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400">Analyse Détaillée des Ratios</h4>
+                                            <div className="space-y-2">
+                                                {selectedApp.scoring.factors.positiveDrivers?.map((driver: string, i: number) => (
+                                                    <div key={i} className="p-2.5 bg-green-50 dark:bg-green-950/30 text-green-700 dark:text-green-300 rounded-xl text-xs flex items-center gap-2">
+                                                        <CheckCircle size={14} className="text-green-600 shrink-0" />
+                                                        <span>{driver}</span>
+                                                    </div>
+                                                ))}
+                                                {selectedApp.scoring.factors.riskAlerts?.map((alert: string, i: number) => (
+                                                    <div key={i} className="p-2.5 bg-red-50 dark:bg-red-950/30 text-red-700 dark:text-red-300 rounded-xl text-xs flex items-center gap-2">
+                                                        <XCircle size={14} className="text-red-600 shrink-0" />
+                                                        <span>{alert}</span>
+                                                    </div>
+                                                ))}
                                             </div>
                                         </div>
+                                    )}
+
+                                    {/* Emprunteur Info */}
+                                    <div className="grid grid-cols-2 gap-4 p-4 bg-slate-50 dark:bg-slate-800/40 rounded-xl text-xs">
+                                        <div>
+                                            <span className="text-slate-400 block mb-1">Revenu Mensuel</span>
+                                            <span className="font-bold text-slate-900 dark:text-white">${selectedApp.client?.monthlyIncome?.toLocaleString() || 'N/A'}</span>
+                                        </div>
+                                        <div>
+                                            <span className="text-slate-400 block mb-1">Activité / Employeur</span>
+                                            <span className="font-bold text-slate-900 dark:text-white">{selectedApp.client?.occupation || 'Non renseigné'} ({selectedApp.client?.employer || '-'})</span>
+                                        </div>
+                                        <div>
+                                            <span className="text-slate-400 block mb-1">Téléphone</span>
+                                            <span className="font-bold text-slate-900 dark:text-white">{selectedApp.client?.phone}</span>
+                                        </div>
+                                        <div>
+                                            <span className="text-slate-400 block mb-1">Durée Prêt</span>
+                                            <span className="font-bold text-slate-900 dark:text-white">{selectedApp.duration} Mois</span>
+                                        </div>
                                     </div>
-                                    <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-all">
-                                        <button className="p-2.5 bg-green-50 text-green-600 rounded-xl hover:bg-green-100 transition-all shadow-sm shadow-green-600/5">
-                                            <CheckCircle2 size={20} />
+
+                                    {/* Décision & Commentaires */}
+                                    <div className="space-y-3 pt-2">
+                                        <label className="block text-xs font-bold uppercase tracking-wider text-slate-500">Motif ou Commentaire de Décision</label>
+                                        <textarea
+                                            value={comment}
+                                            onChange={(e) => setComment(e.target.value)}
+                                            placeholder="Ex: Avis favorable après vérification des justificatifs et garanties..."
+                                            rows={2}
+                                            className="w-full p-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm outline-none focus:ring-2 focus:ring-blue-500"
+                                        />
+                                    </div>
+
+                                    {/* Action Buttons */}
+                                    <div className="flex flex-wrap items-center justify-end gap-3 pt-4 border-t border-slate-100 dark:border-slate-800">
+                                        <button
+                                            disabled={processing}
+                                            onClick={() => handleDecision('REJECT')}
+                                            className="px-5 py-2.5 bg-red-50 text-red-600 hover:bg-red-100 dark:bg-red-950/40 dark:text-red-400 rounded-xl text-sm font-bold transition-all disabled:opacity-50"
+                                        >
+                                            Refuser le dossier
                                         </button>
-                                        <button className="p-2.5 bg-red-50 text-red-600 rounded-xl hover:bg-red-100 transition-all shadow-sm shadow-red-600/5">
-                                            <XCircle size={20} />
+                                        <button
+                                            disabled={processing}
+                                            onClick={() => handleDecision('SEND_TO_COMMITTEE')}
+                                            className="px-5 py-2.5 bg-slate-100 text-slate-700 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-200 rounded-xl text-sm font-bold transition-all disabled:opacity-50"
+                                        >
+                                            Escalader Comité
                                         </button>
-                                        <div className="w-px h-8 bg-slate-100 mx-2"></div>
-                                        <button className="p-2.5 bg-slate-50 text-slate-400 rounded-xl hover:bg-slate-100 transition-all">
-                                            <ArrowUpRight size={20} />
+                                        <button
+                                            disabled={processing}
+                                            onClick={() => handleDecision('APPROVE')}
+                                            className="px-6 py-2.5 bg-green-600 text-white hover:bg-green-700 rounded-xl text-sm font-bold transition-all shadow-md disabled:opacity-50"
+                                        >
+                                            Approuver la demande
                                         </button>
+                                        {selectedApp.status === 'APPROVED' && (
+                                            <button
+                                                disabled={processing}
+                                                onClick={handleDisburse}
+                                                className="px-6 py-2.5 bg-purple-600 text-white hover:bg-purple-700 rounded-xl text-sm font-bold transition-all shadow-md flex items-center gap-1.5"
+                                            >
+                                                <DollarSign size={16} /> Décaisser Immédiatement
+                                            </button>
+                                        )}
                                     </div>
                                 </div>
-                            </motion.div>
-                        ))}
+                            ) : (
+                                <div className="card p-12 text-center text-slate-400">
+                                    <ClipboardList size={48} className="mx-auto mb-4 text-slate-300" />
+                                    <p className="font-bold">Sélectionnez un dossier à gauche</p>
+                                    <p className="text-xs text-slate-400 mt-1">Examinez le scoring et appliquez la décision Maker-Checker.</p>
+                                </div>
+                            )}
+                        </div>
                     </div>
                 </main>
             </div>
-
-            {/* Decision Modal (Simplified) */}
-            <AnimatePresence>
-                {selectedApp && (
-                    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-                        <motion.div 
-                            initial={{ opacity: 0 }}
-                            animate={{ opacity: 1 }}
-                            exit={{ opacity: 0 }}
-                            onClick={() => setSelectedApp(null)}
-                            className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm"
-                        ></motion.div>
-                        <motion.div 
-                            initial={{ opacity: 0, scale: 0.9, y: 20 }}
-                            animate={{ opacity: 1, scale: 1, y: 0 }}
-                            exit={{ opacity: 0, scale: 0.9, y: 20 }}
-                            className="relative w-full max-w-2xl bg-white dark:bg-slate-900 rounded-3xl shadow-2xl overflow-hidden"
-                        >
-                            <div className="p-8">
-                                <div className="flex items-center justify-between mb-8">
-                                    <div className="flex items-center gap-4">
-                                        <div className="w-14 h-14 rounded-2xl bg-blue-600 flex items-center justify-center text-white text-xl font-bold">
-                                            {selectedApp.avatar}
-                                        </div>
-                                        <div>
-                                            <h3 className="text-2xl font-black text-slate-900 dark:text-white">{selectedApp.client}</h3>
-                                            <p className="text-slate-400 font-medium">Demande de prêt #{selectedApp.id}</p>
-                                        </div>
-                                    </div>
-                                    <div className="text-right">
-                                        <p className="text-3xl font-black text-blue-600 tabular-nums">{selectedApp.amount}</p>
-                                        <p className="text-xs text-slate-400 font-bold uppercase tracking-widest mt-1">Montant Demandé</p>
-                                    </div>
-                                </div>
-
-                                <div className="grid grid-cols-2 gap-6 mb-8">
-                                    <div className="p-6 bg-slate-50 dark:bg-slate-800 rounded-2xl border border-slate-100 dark:border-slate-700">
-                                        <div className="flex items-center gap-2 mb-4">
-                                            <Zap className="text-amber-500" size={18} />
-                                            <span className="text-xs font-black uppercase tracking-widest text-slate-400">Score de Risque</span>
-                                        </div>
-                                        <div className="flex items-end gap-3">
-                                            <Text className={`text-5xl font-black ${selectedApp.score > 70 ? 'text-green-600' : 'text-amber-500'}`}>
-                                                {selectedApp.score}
-                                            </Text>
-                                            <span className="text-slate-400 font-bold mb-2">/ 100</span>
-                                        </div>
-                                    </div>
-                                    <div className="p-6 bg-slate-50 dark:bg-slate-800 rounded-2xl border border-slate-100 dark:border-slate-700">
-                                        <div className="flex items-center gap-2 mb-4">
-                                            <AlertCircle className="text-blue-500" size={18} />
-                                            <span className="text-xs font-black uppercase tracking-widest text-slate-400">Facteurs Clés</span>
-                                        </div>
-                                        <div className="space-y-2">
-                                            {selectedApp.factors.map((f: string) => (
-                                                <div key={f} className="flex items-center gap-2">
-                                                    <div className="w-1 h-1 bg-blue-500 rounded-full"></div>
-                                                    <span className="text-xs font-bold text-slate-600 dark:text-slate-300">{f}</span>
-                                                </div>
-                                            ))}
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <div className="mb-8">
-                                    <label className="text-xs font-black uppercase tracking-widest text-slate-400 block mb-3">Observations & Commentaires</label>
-                                    <textarea 
-                                        className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-2xl p-4 text-sm font-medium outline-none focus:ring-2 focus:ring-blue-500/20 transition-all"
-                                        rows={4}
-                                        placeholder="Notez vos remarques ici..."
-                                    ></textarea>
-                                </div>
-
-                                <div className="flex gap-4">
-                                    <button className="flex-1 py-4 bg-green-600 hover:bg-green-700 text-white rounded-2xl font-bold shadow-lg shadow-green-600/20 transition-all active:scale-[0.98] flex items-center justify-center gap-2">
-                                        <CheckCircle2 size={20} /> Approuver le dossier
-                                    </button>
-                                    <button className="flex-1 py-4 bg-red-500 hover:bg-red-600 text-white rounded-2xl font-bold shadow-lg shadow-red-500/20 transition-all active:scale-[0.98] flex items-center justify-center gap-2">
-                                        <XCircle size={20} /> Rejeter la demande
-                                    </button>
-                                </div>
-                            </div>
-                        </motion.div>
-                    </div>
-                )}
-            </AnimatePresence>
         </div>
     );
 }

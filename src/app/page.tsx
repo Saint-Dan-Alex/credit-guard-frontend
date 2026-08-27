@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import Sidebar from '@/components/Sidebar';
 import Header from '@/components/Header';
 import { motion } from 'framer-motion';
@@ -14,10 +14,49 @@ import {
   ArrowDownRight,
   Zap,
   Calendar,
-  Filter
+  Filter,
+  RefreshCw,
+  Clock,
+  CheckCircle,
+  XCircle
 } from 'lucide-react';
+import { api } from '@/lib/api';
 
 export default function Dashboard() {
+  const [stats, setStats] = useState<any>(null);
+  const [recentApps, setRecentApps] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  const loadData = async () => {
+    try {
+      setLoading(true);
+      const [statsData, appsData] = await Promise.all([
+        api.getDashboardStats().catch(() => ({
+          activeLoansCount: 0,
+          totalPortfolio: 0,
+          totalDisbursed: 0,
+          totalCollected: 0,
+          averageScore: 78,
+          defaultRate: 2.5,
+          overdueLoansCount: 0,
+          overdueAmount: 0,
+          totalApplicationsCount: 0,
+        })),
+        api.getApplications().catch(() => []),
+      ]);
+      setStats(statsData);
+      setRecentApps(appsData.slice(0, 5));
+    } catch (err) {
+      console.error('Dashboard load error:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadData();
+  }, []);
+
   const container = {
     hidden: { opacity: 0 },
     show: {
@@ -26,11 +65,6 @@ export default function Dashboard() {
         staggerChildren: 0.1
       }
     }
-  };
-
-  const item = {
-    hidden: { opacity: 0, y: 20 },
-    show: { opacity: 1, y: 0 }
   };
 
   return (
@@ -56,7 +90,7 @@ export default function Dashboard() {
                 transition={{ delay: 0.1 }}
                 className="text-slate-500 dark:text-slate-400 mt-1 font-medium"
               >
-                Aperçu de la performance et analyse de risque IA
+                Aperçu de la performance financière et analyse de risque IA
               </motion.p>
             </div>
             <motion.div 
@@ -64,11 +98,11 @@ export default function Dashboard() {
               animate={{ opacity: 1, scale: 1 }}
               className="flex items-center gap-3"
             >
-              <button className="flex items-center gap-2 px-4 py-2.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-sm font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-50 transition-all shadow-sm">
-                <Calendar size={18} /> Jan 2026 - Mai 2026
-              </button>
-              <button className="flex items-center gap-2 px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-sm font-bold transition-all shadow-lg shadow-blue-600/20 active:scale-95">
-                <Filter size={18} /> Filtrer
+              <button 
+                onClick={loadData}
+                className="flex items-center gap-2 px-4 py-2.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-sm font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-50 transition-all shadow-sm"
+              >
+                <RefreshCw size={16} className={loading ? 'animate-spin' : ''} /> Actualiser
               </button>
             </motion.div>
           </div>
@@ -82,39 +116,39 @@ export default function Dashboard() {
           >
             <StatCard
               title="Prêts Actifs"
-              value="1,248"
+              value={stats?.activeLoansCount?.toLocaleString() || '0'}
               icon={<Wallet className="text-white" size={24} />}
               iconBg="bg-blue-600"
               trend="+12.5%"
               trendUp={true}
-              desc="84 nouveaux ce mois"
+              desc="Encours en cours"
             />
             <StatCard
-              title="Taux de Défaut"
-              value="3.21%"
+              title="Taux de Défaut (NPL)"
+              value={`${stats?.defaultRate || 0}%`}
               icon={<AlertCircle className="text-white" size={24} />}
-              iconBg="bg-red-500"
-              trend="-0.5%"
-              trendUp={false}
-              desc="Optimisation en cours"
+              iconBg={stats?.defaultRate > 5 ? 'bg-red-500' : 'bg-green-500'}
+              trend={stats?.defaultRate > 5 ? '+0.8%' : '-0.5%'}
+              trendUp={stats?.defaultRate <= 5}
+              desc="PAR / Risque Global"
             />
             <StatCard
-              title="Score Moyen"
-              value="78/100"
+              title="Score Risque Moyen"
+              value={`${stats?.averageScore || 0}/100`}
               icon={<TrendingUp className="text-white" size={24} />}
-              iconBg="bg-green-500"
-              trend="+4.2%"
+              iconBg="bg-emerald-500"
+              trend="+3.4%"
               trendUp={true}
-              desc="Qualité de portefeuille"
+              desc="Qualité du portefeuille"
             />
             <StatCard
-              title="Portefeuille"
-              value="4.5M $"
+              title="Portefeuille Total"
+              value={`$${(stats?.totalPortfolio || 0).toLocaleString()}`}
               icon={<BarChart3 className="text-white" size={24} />}
               iconBg="bg-amber-500"
               trend="+8.1%"
               trendUp={true}
-              desc="Encours global"
+              desc="Encours restant dû"
             />
           </motion.div>
 
@@ -128,10 +162,12 @@ export default function Dashboard() {
             >
               <div className="flex items-center justify-between p-6 pb-4">
                 <h3 className="font-bold text-slate-800 dark:text-white flex items-center gap-2">
-                  Demandes Récentes
-                  <span className="px-2 py-0.5 bg-slate-100 dark:bg-slate-800 text-[10px] rounded-full text-slate-500">Live</span>
+                  Demandes de Prêt Récentes
+                  <span className="px-2 py-0.5 bg-blue-100 text-blue-700 text-[10px] font-bold rounded-full">Temps Réel</span>
                 </h3>
-                <button className="text-blue-600 text-sm font-bold hover:bg-blue-50 px-3 py-1.5 rounded-lg transition-all">Tout voir</button>
+                <a href="/applications" className="text-blue-600 text-sm font-bold hover:bg-blue-50 px-3 py-1.5 rounded-lg transition-all">
+                  Tout voir
+                </a>
               </div>
               <div className="overflow-x-auto">
                 <table className="w-full text-left">
@@ -139,50 +175,38 @@ export default function Dashboard() {
                     <tr>
                       <th className="px-6 py-4">Client</th>
                       <th className="px-6 py-4">Montant</th>
-                      <th className="px-6 py-4">Scoring</th>
+                      <th className="px-6 py-4">Scoring IA</th>
                       <th className="px-6 py-4">Statut</th>
                       <th className="px-6 py-4 text-right">Action</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                    <TableRow 
-                      name="Marie Nzambe" 
-                      email="marie.n@gmail.com"
-                      avatar="MN"
-                      amount="5,000 $" 
-                      score={82} 
-                      status="APPROVED" 
-                    />
-                    <TableRow 
-                      name="Jean-Paul Bodo" 
-                      email="jp.bodo@outlook.fr"
-                      avatar="JB"
-                      amount="12,500 $" 
-                      score={64} 
-                      status="PENDING" 
-                    />
-                    <TableRow 
-                      name="Alice Kapinga" 
-                      email="alice.k@rdc.cd"
-                      avatar="AK"
-                      amount="3,000 $" 
-                      score={42} 
-                      status="REJECTED" 
-                    />
-                    <TableRow 
-                      name="Socio Agri Coop" 
-                      email="contact@agricoop.org"
-                      avatar="SA"
-                      amount="45,000 $" 
-                      score={88} 
-                      status="APPROVED" 
-                    />
+                    {recentApps.length === 0 ? (
+                      <tr>
+                        <td colSpan={5} className="px-6 py-8 text-center text-slate-400 text-sm">
+                          Aucune demande enregistrée pour le moment.
+                        </td>
+                      </tr>
+                    ) : (
+                      recentApps.map((app) => (
+                        <TableRow 
+                          key={app.id}
+                          id={app.id}
+                          name={`${app.client?.firstName} ${app.client?.lastName}`}
+                          email={app.client?.email || app.client?.phone}
+                          avatar={`${app.client?.firstName?.[0] || ''}${app.client?.lastName?.[0] || ''}`}
+                          amount={`$${app.amount?.toLocaleString()}`}
+                          score={app.scoring?.score || 50}
+                          status={app.status}
+                        />
+                      ))
+                    )}
                   </tbody>
                 </table>
               </div>
             </motion.div>
 
-            {/* AI Risk Analysis */}
+            {/* AI Risk Analysis & Recommendations */}
             <motion.div 
               initial={{ opacity: 0, x: 20 }}
               animate={{ opacity: 1, x: 0 }}
@@ -197,54 +221,63 @@ export default function Dashboard() {
                   <span className="px-3 py-1 bg-white/10 rounded-full text-[10px] font-bold tracking-widest uppercase border border-white/10">Intelligence Artificielle</span>
                 </div>
                 
-                <h3 className="text-xl font-bold mb-2">Analyse de Risque</h3>
-                <p className="text-slate-400 text-sm mb-8 leading-relaxed">Le moteur CreditGuard a identifié 12 dossiers nécessitant une attention immédiate.</p>
+                <h3 className="text-xl font-bold mb-2">Moteur Décisionnel XAI</h3>
+                <p className="text-slate-400 text-sm mb-6 leading-relaxed">
+                  Surveillance continue du portefeuille et évaluation automatique des ratios d'endettement DTI.
+                </p>
                 
                 <div className="space-y-4">
-                  <div className="p-4 bg-white/5 rounded-2xl border border-white/5 hover:bg-white/10 transition-all cursor-pointer group">
+                  <div className="p-4 bg-white/5 rounded-2xl border border-white/5 hover:bg-white/10 transition-all cursor-pointer">
                     <div className="flex items-start gap-3">
                       <AlertCircle className="text-amber-400 mt-1" size={18} />
                       <div>
-                        <p className="text-sm font-bold">Alerte Recouvrement</p>
-                        <p className="text-xs text-slate-400 mt-1">12 clients ont dépassé la date d'échéance de 15 jours.</p>
-                        <div className="mt-4 h-1 w-full bg-white/10 rounded-full overflow-hidden">
-                          <motion.div 
-                            initial={{ width: 0 }}
-                            animate={{ width: '75%' }}
-                            transition={{ duration: 1, delay: 0.8 }}
-                            className="h-full bg-amber-400"
-                          ></motion.div>
-                        </div>
+                        <p className="text-sm font-bold">Impayés & Recouvrement</p>
+                        <p className="text-xs text-slate-400 mt-1">
+                          {stats?.overdueLoansCount || 0} dossier(s) en souffrance nécessitant une relance.
+                        </p>
                       </div>
                     </div>
                   </div>
 
-                  <div className="p-4 bg-white/5 rounded-2xl border border-white/5 hover:bg-white/10 transition-all cursor-pointer group">
+                  <div className="p-4 bg-white/5 rounded-2xl border border-white/5 hover:bg-white/10 transition-all cursor-pointer">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-3">
                         <div className="p-2 bg-green-500/20 rounded-lg">
                           <CheckCircle2 className="text-green-400" size={18} />
                         </div>
-                        <span className="text-sm font-bold">Santé Portefeuille</span>
+                        <span className="text-sm font-bold">Qualité du Portefeuille</span>
                       </div>
-                      <span className="text-lg font-black text-green-400">A+</span>
+                      <span className="text-lg font-black text-green-400">
+                        {stats?.averageScore >= 75 ? 'A+' : stats?.averageScore >= 60 ? 'B' : 'C'}
+                      </span>
                     </div>
                   </div>
                 </div>
 
-                <button className="w-full mt-8 py-3.5 bg-blue-600 hover:bg-blue-500 rounded-xl text-sm font-bold transition-all shadow-lg shadow-blue-600/30 active:scale-[0.98]">
-                  Générer rapport IA
-                </button>
+                <a 
+                  href="/applications/tasks"
+                  className="block text-center w-full mt-6 py-3.5 bg-blue-600 hover:bg-blue-500 rounded-xl text-sm font-bold transition-all shadow-lg shadow-blue-600/30"
+                >
+                  Examiner les Tâches & Validation
+                </a>
               </div>
 
               {/* Quick Actions */}
               <div className="card p-6">
                 <h3 className="font-bold text-slate-800 dark:text-white mb-4">Actions Rapides</h3>
                 <div className="grid grid-cols-2 gap-3">
-                  <QuickActionButton label="Nouveau Client" color="bg-blue-50 text-blue-600" />
-                  <QuickActionButton label="Dossier Prêt" color="bg-indigo-50 text-indigo-600" />
-                  <QuickActionButton label="Collecte" color="bg-amber-50 text-amber-600" />
-                  <QuickActionButton label="Recouvrement" color="bg-red-50 text-red-600" />
+                  <a href="/clients" className="p-3 bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded-xl font-bold text-xs text-center hover:bg-blue-100 transition-colors">
+                    Nouveau Client
+                  </a>
+                  <a href="/applications" className="p-3 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 rounded-xl font-bold text-xs text-center hover:bg-indigo-100 transition-colors">
+                    Nouvelle Demande
+                  </a>
+                  <a href="/loans" className="p-3 bg-amber-50 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400 rounded-xl font-bold text-xs text-center hover:bg-amber-100 transition-colors">
+                    Encaisser Paiement
+                  </a>
+                  <a href="/recovery" className="p-3 bg-red-50 dark:bg-red-900/30 text-red-600 dark:text-red-400 rounded-xl font-bold text-xs text-center hover:bg-red-100 transition-colors">
+                    Relances Impayés
+                  </a>
                 </div>
               </div>
             </motion.div>
@@ -276,11 +309,6 @@ function StatCard({ title, value, icon, iconBg, trend, trendUp, desc }: any) {
       </div>
       <div className="mt-4 pt-4 border-t border-slate-50 dark:border-slate-800 flex items-center justify-between">
         <span className="text-[11px] text-slate-400 font-medium">{desc}</span>
-        <div className="flex -space-x-2">
-          {[1, 2, 3].map(i => (
-            <div key={i} className="w-5 h-5 rounded-full border-2 border-white dark:border-slate-800 bg-slate-200 dark:bg-slate-700"></div>
-          ))}
-        </div>
       </div>
     </motion.div>
   );
@@ -289,16 +317,18 @@ function StatCard({ title, value, icon, iconBg, trend, trendUp, desc }: any) {
 function TableRow({ name, email, avatar, amount, score, status }: any) {
   const statusConfig: any = {
     APPROVED: { label: 'Approuvé', color: 'bg-green-500/10 text-green-600 border-green-200/50' },
-    PENDING: { label: 'En attente', color: 'bg-amber-500/10 text-amber-600 border-amber-200/50' },
+    SUBMITTED: { label: 'Soumis', color: 'bg-blue-500/10 text-blue-600 border-blue-200/50' },
+    UNDER_REVIEW: { label: 'En Analyse', color: 'bg-amber-500/10 text-amber-600 border-amber-200/50' },
     REJECTED: { label: 'Refusé', color: 'bg-red-500/10 text-red-600 border-red-200/50' },
+    DISBURSED: { label: 'Décaissé', color: 'bg-purple-500/10 text-purple-600 border-purple-200/50' },
   };
 
-  const currentStatus = statusConfig[status];
+  const currentStatus = statusConfig[status] || { label: status, color: 'bg-gray-100 text-gray-700' };
 
   return (
     <motion.tr 
       whileHover={{ backgroundColor: 'rgba(248, 250, 252, 0.5)' }}
-      className="transition-colors group cursor-pointer"
+      className="transition-colors group"
     >
       <td className="px-6 py-4">
         <div className="flex items-center gap-4">
@@ -320,36 +350,23 @@ function TableRow({ name, email, avatar, amount, score, status }: any) {
             </span>
           </div>
           <div className="w-24 h-1.5 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
-            <motion.div 
-              initial={{ width: 0 }}
-              animate={{ width: `${score}%` }}
-              transition={{ duration: 1, delay: 0.5 }}
-              className={`h-full ${score > 70 ? 'bg-green-500' : score > 50 ? 'bg-amber-500' : 'bg-red-500'}`}
-            ></motion.div>
+            <div 
+              className={`h-full rounded-full ${score > 70 ? 'bg-green-500' : score > 50 ? 'bg-amber-500' : 'bg-red-500'}`}
+              style={{ width: `${score}%` }}
+            ></div>
           </div>
         </div>
       </td>
       <td className="px-6 py-4">
-        <span className={`px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-widest border ${currentStatus.color}`}>
+        <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold border ${currentStatus.color}`}>
           {currentStatus.label}
         </span>
       </td>
       <td className="px-6 py-4 text-right">
-        <button className="p-2 text-slate-300 hover:text-blue-600 transition-colors opacity-0 group-hover:opacity-100">
-          <ArrowUpRight size={18} />
-        </button>
+        <a href="/applications" className="text-xs font-bold text-blue-600 hover:text-blue-700">
+          Détails →
+        </a>
       </td>
     </motion.tr>
-  );
-}
-
-function QuickActionButton({ label, color }: any) {
-  return (
-    <button className={`p-4 rounded-2xl flex flex-col items-center justify-center gap-2 text-xs font-bold transition-all hover:scale-105 active:scale-95 shadow-sm ${color}`}>
-      <div className="p-2 rounded-xl bg-white/50">
-        <Zap size={16} />
-      </div>
-      {label}
-    </button>
   );
 }

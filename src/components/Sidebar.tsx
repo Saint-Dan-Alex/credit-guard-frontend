@@ -15,7 +15,11 @@ import {
     Settings,
     Shield,
     LogOut,
-    ChevronRight
+    ChevronRight,
+    History,
+    Layers,
+    Sparkles,
+    Bot
 } from 'lucide-react';
 
 export default function Sidebar() {
@@ -24,15 +28,17 @@ export default function Sidebar() {
     const menuItems = [
         { icon: <LayoutDashboard size={20} />, label: 'Tableau de Bord', href: '/' },
         { icon: <FileText size={20} />, label: 'Demandes', href: '/applications' },
-        { icon: <ClipboardList size={20} />, label: 'Tâches', href: '/applications/tasks', badge: '12' },
-        { icon: <Users size={20} />, label: 'Clients', href: '/clients' },
-        { icon: <Wallet size={20} />, label: 'Prêts Actifs', href: '/loans' },
-        { icon: <AlertCircle size={20} />, label: 'Recouvrement', href: '/recovery' },
-        { icon: <BarChart3 size={20} />, label: 'Rapports', href: '/reports' },
+        { icon: <ClipboardList size={20} />, label: 'Tâches & Décisions', href: '/applications/tasks', badge: '12' },
+        { icon: <Sparkles size={20} />, label: 'Intelligence IA & Copilot', href: '/ai-assistant' },
+        { icon: <Users size={20} />, label: 'Clients Emprunteurs', href: '/clients' },
+        { icon: <Wallet size={20} />, label: 'Prêts & Restructuration', href: '/loans' },
+        { icon: <AlertCircle size={20} />, label: 'Recouvrement & Contentieux', href: '/recovery' },
+        { icon: <BarChart3 size={20} />, label: 'Rapports & Risque', href: '/reports' },
     ];
 
     const adminItems = [
-        { icon: <Shield size={20} />, label: 'Gestion Accès', href: '/admin/users' },
+        { icon: <Shield size={20} />, label: 'Utilisateurs & Overrides', href: '/admin/users' },
+        { icon: <Layers size={20} />, label: 'Rôles & Matrice HRBAC', href: '/admin/roles' },
         { icon: <History size={20} />, label: "Journaux d'Audit", href: '/admin/logs' },
     ];
 
@@ -58,10 +64,10 @@ export default function Sidebar() {
                 </div>
             </div>
 
-            <nav className="flex-1 px-6 space-y-8 mt-4 overflow-y-auto relative z-10 custom-scrollbar">
+            <nav className="flex-1 px-6 space-y-8 mt-2 overflow-y-auto relative z-10 custom-scrollbar">
                 <div>
-                    <p className="text-[10px] font-black text-blue-300/40 uppercase px-3 mb-4 tracking-[0.2em]">Menu Principal</p>
-                    <div className="space-y-1.5">
+                    <p className="text-[10px] font-black text-blue-300/40 uppercase px-3 mb-3 tracking-[0.2em]">Menu Opérationnel</p>
+                    <div className="space-y-1">
                         {menuItems.map((item) => (
                             <NavItem key={item.href} item={item} active={pathname === item.href} />
                         ))}
@@ -69,15 +75,11 @@ export default function Sidebar() {
                 </div>
 
                 <div>
-                    <p className="text-[10px] font-black text-blue-300/40 uppercase px-3 mb-4 tracking-[0.2em]">Administration</p>
-                    <div className="space-y-1.5">
+                    <p className="text-[10px] font-black text-blue-300/40 uppercase px-3 mb-3 tracking-[0.2em]">Administration HRBAC</p>
+                    <div className="space-y-1">
                         {adminItems.map((item) => (
                             <NavItem key={item.href} item={item} active={pathname === item.href} />
                         ))}
-                        <NavItem 
-                            item={{ icon: <Settings size={20} />, label: 'Configuration', href: '/settings' }} 
-                            active={pathname === '/settings'} 
-                        />
                     </div>
                 </div>
             </nav>
@@ -92,9 +94,9 @@ export default function Sidebar() {
                             <p className="text-xs font-bold truncate">Joël Ngombo</p>
                             <p className="text-[9px] text-blue-300 font-bold uppercase tracking-wider">Super Admin</p>
                         </div>
-                        <button className="p-1.5 text-blue-300 hover:text-white hover:bg-white/10 rounded-lg transition-all">
+                        <Link href="/login" className="p-1.5 text-blue-300 hover:text-white hover:bg-white/10 rounded-lg transition-all">
                             <LogOut size={16} />
-                        </button>
+                        </Link>
                     </div>
                 </div>
             </div>
@@ -102,40 +104,36 @@ export default function Sidebar() {
     );
 }
 
-function NavItem({ item, active }: { item: any, active: boolean }) {
+function NavItem({ item, active }: { item: any; active: boolean }) {
     return (
         <Link
             href={item.href}
-            className={`group flex items-center p-3 text-sm font-bold rounded-xl cursor-pointer transition-all relative overflow-hidden ${
-                active 
-                    ? 'bg-white text-blue-700 shadow-xl shadow-blue-900/40' 
-                    : 'text-blue-100 hover:bg-white/10'
+            className={`flex items-center justify-between px-3.5 py-2.5 rounded-2xl font-bold text-xs transition-all relative group ${
+                active
+                    ? 'text-white shadow-lg shadow-blue-900/40 bg-white/15 backdrop-blur-md'
+                    : 'text-blue-100/70 hover:text-white hover:bg-white/5'
             }`}
         >
-            <span className={`relative z-10 transition-transform duration-300 ${active ? 'scale-110' : 'group-hover:scale-110'}`}>
-                {item.icon}
-            </span>
-            <span className="ml-3 relative z-10">{item.label}</span>
-            
-            {item.badge && (
-                <div className={`ml-auto px-2 py-0.5 rounded-full text-[10px] font-black ${active ? 'bg-blue-100 text-blue-700' : 'bg-blue-500/20 text-blue-100'}`}>
-                    {item.badge}
-                </div>
-            )}
-            
-            {active && (
-                <motion.div 
-                    layoutId="active-glow"
-                    className="absolute right-0 top-0 h-full w-1 bg-blue-400 shadow-[0_0_15px_rgba(96,165,250,0.8)]"
-                />
-            )}
-            
-            {!active && (
-                <ChevronRight 
-                    size={14} 
-                    className="ml-auto opacity-0 -translate-x-2 group-hover:opacity-40 group-hover:translate-x-0 transition-all duration-300" 
-                />
-            )}
+            <div className="flex items-center gap-3">
+                <span className={`${active ? 'text-white' : 'text-blue-300 group-hover:text-white transition-colors'}`}>
+                    {item.icon}
+                </span>
+                <span className="tracking-wide">{item.label}</span>
+            </div>
+
+            <div className="flex items-center gap-2">
+                {item.badge && (
+                    <span className="px-2 py-0.5 rounded-full text-[9px] font-black bg-orange-500 text-white shadow-sm">
+                        {item.badge}
+                    </span>
+                )}
+                {active && (
+                    <motion.div
+                        layoutId="activeIndicator"
+                        className="w-1.5 h-4 bg-white rounded-full shadow-[0_0_8px_rgba(255,255,255,0.8)]"
+                    />
+                )}
+            </div>
         </Link>
     );
 }
